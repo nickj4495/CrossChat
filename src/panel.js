@@ -19,14 +19,15 @@
         :host{color-scheme:dark}*{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible{outline:2px solid #b6a0ff;outline-offset:3px}
         .panel{width:350px;max-width:calc(100vw - 32px);font:14px/1.5 system-ui,sans-serif;color:#eeeef5;background:#14141c;border:1px solid #393344;border-radius:16px;box-shadow:0 12px 48px #0009;overflow:hidden}
         header{display:flex;align-items:center;gap:10px;padding:16px;border-bottom:1px solid #2c2936}.logo{display:grid;place-items:center;width:34px;height:34px;background:#a78bfa;color:#171022;border-radius:10px;font-weight:900}.title{flex:1}h2{font-size:16px;margin:0}small{font-size:11px;color:#aaa6ba}.collapse{background:#252331;border:1px solid #464052;border-radius:8px;color:#eee;width:32px;height:32px}
-        .notice{margin:12px 14px 0;padding:8px 10px;background:#252033;color:#cbbbeb;border-radius:8px;font-size:12px}.messages{height:300px;max-height:calc(100dvh - 390px);min-height:70px;overflow:auto;overscroll-behavior:contain;padding:8px 14px;scrollbar-width:thin}.message{padding:10px 0;border-bottom:1px solid #ffffff08;overflow-wrap:anywhere}.meta{display:flex;align-items:center;gap:7px;font-size:12px}.badge{font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 5px;border-radius:4px}.twitch{background:#382452;color:#d5b7ff}.youtube{background:#48232b;color:#ffa8b1}time{margin-left:auto;color:#8e899f;font-size:10px}.text{margin:5px 0 0;color:#d9d6e3}.local{font-size:10px;color:#aaa6ba}
+        .notice{margin:12px 14px 0;padding:8px 10px;background:#252033;color:#cbbbeb;border-radius:8px;font-size:12px}.messages{height:300px;max-height:calc(100dvh - 440px);min-height:70px;overflow:auto;overscroll-behavior:contain;padding:8px 14px;scrollbar-width:thin}.message{padding:10px 0;border-bottom:1px solid #ffffff08;overflow-wrap:anywhere}.meta{display:flex;align-items:center;gap:7px;font-size:12px}.badge{font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 5px;border-radius:4px}.twitch{background:#382452;color:#d5b7ff}.youtube{background:#48232b;color:#ffa8b1}time{margin-left:auto;color:#8e899f;font-size:10px}.text{margin:5px 0 0;color:#d9d6e3}.local{font-size:10px;color:#aaa6ba}
         form{padding:12px 14px 14px;border-top:1px solid #2c2936}label{display:block;font-size:12px;color:#aaa6ba;margin-bottom:6px}.compose{display:flex;gap:8px}input{min-width:0;flex:1;background:#20202b;color:#fff;border:1px solid #464052;border-radius:8px;padding:10px}button[type=submit]{border:0;border-radius:8px;background:#b399ff;color:#211435;font-weight:700;padding:0 13px}button:disabled{opacity:.45;cursor:default}.foot{display:block;margin-top:8px;color:#9791a9;font-size:11px}[hidden]{display:none!important}
         .source{display:block;color:#b9acd3;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.filters{margin:10px 14px;color:#bbb3cd;font-size:12px}.filters summary{cursor:pointer}.source-options{max-height:120px;overflow:auto;padding-top:6px}.source-option{display:flex;align-items:center;gap:7px;font-size:11px;overflow-wrap:anywhere;margin:6px 0}.source-option input{flex:none;min-width:16px;width:16px;height:16px;margin:0;accent-color:#b399ff}.empty{margin:10px 14px;color:#aaa6ba;font-size:12px}
+        .connection{margin:8px 14px;font-size:11px;color:#c0b4d9;white-space:pre-line;overflow-wrap:anywhere}
       </style>
-      <section class="panel" aria-label="CrossChat mock chat">
-        <header><span class="logo" aria-hidden="true">C↔</span><div class="title"><h2>CrossChat</h2><small>MULTI-SOURCE · LOCAL DEMO</small></div><button class="collapse" aria-label="Collapse CrossChat" aria-expanded="true">−</button></header>
-        <div class="body"><p class="notice">Mock chat · History saved on this device.</p><details class="filters"><summary>Sources</summary><div class="source-options"></div></details><p class="empty" hidden>No messages match your source filters.</p><div class="messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
-        <form><label for="message">Your message <span class="destination"></span></label><div class="compose"><input id="message" maxlength="500" autocomplete="off" placeholder="Say hello to the room…"><button type="submit" disabled>Send</button></div><span class="foot" role="status">Local demo only. Nothing is sent to either platform.</span></form></div>
+      <section class="panel" aria-label="CrossChat combined chat">
+        <header><span class="logo" aria-hidden="true">C↔</span><div class="title"><h2>CrossChat</h2><small>MULTI-SOURCE CHAT</small></div><button class="collapse" aria-label="Collapse CrossChat" aria-expanded="true">−</button></header>
+        <div class="body"><p class="notice">Mock chat · History saved on this device.</p><p class="connection" role="status">Checking Twitch connection…</p><details class="filters"><summary>Sources</summary><div class="source-options"></div></details><p class="empty" hidden>No messages match your source filters.</p><div class="messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
+        <form><label for="message">Your message <span class="destination"></span></label><div class="compose"><input id="message" maxlength="500" autocomplete="off" placeholder="Send a local demo message…"><button type="submit" disabled>Send demo</button></div><span class="foot" role="status">Local demo only. Nothing is sent to either platform.</span></form></div>
       </section>`;
     const log = root.querySelector('.messages');
     const input = root.querySelector('input');
@@ -59,6 +60,12 @@
         label.textContent = 'Local demo · Shared across your room tabs';
         row.append(label);
       }
+      if (!message.local) {
+        const kind = document.createElement('span');
+        kind.className = 'local';
+        kind.textContent = message.origin === 'twitch-eventsub' ? 'Live Twitch message · received this session' : 'Sample message';
+        row.append(kind);
+      }
       log.append(row);
       while (log.children.length > 200) log.firstElementChild.remove();
       log.scrollTop = log.scrollHeight;
@@ -74,6 +81,10 @@
         status.textContent = 'Could not refresh chat. Your next send will retry the connection.';
         return;
       }
+      const live = provider.getLiveStatus?.();
+      root.querySelector('.connection').textContent = live
+        ? [live.message, ...(live.sources || []).filter(source => source.state === 'error').map(source => `${source.label}: ${source.message}`)].join('\n')
+        : 'Local demo. Sign in through the extension popup for read-only Twitch chat.';
       const messages = provider.getMessages();
       const room = provider.getRoom();
       if (room.key !== filterRoomKey) {

@@ -1,6 +1,6 @@
-﻿# CrossChat — milestone 4: multi-source rooms
+﻿# CrossChat — milestone 5: read-only Twitch chat
 
-CrossChat aims to combine live chats for streamers and viewers. This dependency-free Manifest V3 prototype demonstrates a shared local conversation across **2–10 Twitch channels and/or YouTube videos in one Chrome profile**. It does not read or post native chats, connect different computers, or use authentication/APIs.
+CrossChat aims to combine live chats for streamers and viewers. This dependency-free Manifest V3 extension supports a shared local room across **2–10 Twitch channels and/or YouTube videos in one Chrome profile**. It now implements Twitch OAuth and read-only EventSub chat for the room's Twitch sources. YouTube and message sending remain local demos. Cross-device CrossChat rooms are not implemented.
 
 ## Load locally
 
@@ -9,7 +9,7 @@ CrossChat aims to combine live chats for streamers and viewers. This dependency-
 3. After extension edits, click **Reload** on its card and refresh existing test tabs.
 4. Pin CrossChat through Chrome's Extensions menu (puzzle icon) to access the popup.
 
-No build step, npm install, server, or API keys are required.
+No build step, npm install, or server is required. Local demos need no credentials. For real Twitch reading, register a Twitch app and enter its public Client ID in the popup; no client secret is used. Follow [Twitch setup and testing](docs/twitch-integration.md).
 
 ## Create a multi-source room
 
@@ -28,7 +28,7 @@ No build step, npm install, server, or API keys are required.
 
 To add a source, add a URL line. To remove one, delete its line. Then click **Save room** again. URL drafts survive popup closure, so you can copy URLs one at a time. Draft changes do not affect the active room until saved.
 
-Only one source list is active at a time. Other pages keep separate histories. You can watch one video and close the other tabs; saved room messages remain visible, but there is no live native chat feed or automatic message simulation. To generate new local demo messages from another source, open its page and send from CrossChat there.
+Only one source list is active at a time. Other pages keep separate histories. You can watch one video and close the other tabs. After Twitch sign-in, the background connection reads all selected Twitch channels without keeping their pages open. Without sign-in, only saved samples/local demos appear. To generate a local demo message from another source, open its page and send through CrossChat there.
 
 ## History and compatibility
 
@@ -37,14 +37,17 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 - **Disconnect room** restores each page's separate saved history. It does not delete room history.
 - Each history keeps its latest 200 messages, with a 500-character input limit. New room samples cover every configured source. Refreshing restores timestamps and history without adding new samples.
 - Source filters are per panel and remain active as new messages arrive. They do not delete messages, stop sends, or affect other tabs. Filters reset after refresh, panel recreation, or switching rooms. Chat drafts and scroll position are not persisted.
-- The enable toggle controls panel visibility across tabs. Collapse with the minus button to reach content under the panel; fullscreen video hides it.
+- Native Twitch messages have a separate, temporary 200-message worker buffer; see the Twitch guide for its clearing/reconnect behavior. The enable toggle controls panel visibility and pauses live reading across tabs. Collapse with the minus button to reach content under the panel; fullscreen video hides it.
 
 ## Architecture
 
-- `manifest.json`: MV3, scoped content scripts, popup, service worker, and only the `storage` permission.
+- `manifest.json`: MV3 (Chrome 116+), scoped content scripts, popup, service worker, storage/identity/alarms permissions, and host access limited to Twitch identity/API endpoints.
 - `src/mock-chat.js`: route detection, normalized mock messages, and optional source metadata (`sourceKey`, `sourceLabel`).
 - `src/history.js`: validated versioned history storage, retention, and save confirmation before memory is updated.
 - `src/rooms.js`: validates/canonicalizes source lists, identifies rooms, resolves page membership, decorates legacy messages, and serializes reads/writes to avoid conflicting sends from different tabs.
+- `src/twitch-auth.js`: browser OAuth, verified callbacks, session-only tokens, validation, revocation, and constrained API requests.
+- `src/twitch-eventsub.js`, `twitch-buffer.js`, `twitch-live.js`: event normalization, bounded native-message buffer, moderation, subscription checks, reconnects, and multi-source connection status.
+- `src/twitch-ui.js`: popup setup/sign-in/sign-out/reconnect controls.
 - `src/background.js`: single-writer service worker. Validates senders, accepts room changes only from the popup, and derives origin labels from the sending page URL.
 - `src/room-client.js`: message/snapshot requests and live storage-change subscriptions with stale-response protection and cleanup.
 - `src/content.js`: navigation and panel lifecycle; guarded recovery checks start before initial rendering. Rechecks removal, fullscreen, visibility, and page restoration.
@@ -54,7 +57,7 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 
 The background service provides a single place to coordinate room changes and sends. Durable state is reloaded from storage for each operation, so worker restarts preserve it. Messages use asynchronous replies as documented in [Chrome message passing](https://developer.chrome.com/docs/extensions/develop/concepts/messaging).
 
-A later backend can implement shared rooms across computers. Real chat ingestion, OAuth, identities, streamer ownership verification, moderation, rate limits, and native cross-posting remain future work requiring platform-specific verification.
+A later backend can implement shared rooms across computers. Twitch read-only OAuth/EventSub ingestion is implemented, with simulated-service coverage. Real OAuth and subscriptions must still be verified with a registered app. YouTube ingestion, CrossChat identities, streamer ownership verification, native cross-posting, and cross-device delivery remain future work.
 
 ## Prototype limits
 
@@ -62,7 +65,7 @@ A later backend can implement shared rooms across computers. Real chat ingestion
 - Save failures keep the current draft for retry. Invalid stored histories are left untouched. A queued send rejects if its selected room changed before processing. No automatic send retries are used, since a lost response could otherwise duplicate a message.
 - URL matching does not verify streamer ownership or live status. Twitch channels may be offline and YouTube videos may be recordings. YouTube source labels use video IDs because no metadata API is connected.
 - Supported URLs use `https://www.twitch.tv/CHANNEL`, `https://www.youtube.com/watch?v=ID`, or `https://www.youtube.com/live/ID`. Mobile subdomains, Shorts, embedded players, chat popouts, and Twitch video pages are outside this milestone.
-- Everyone is labeled **You** because there are no identities yet. CrossChat messages do not enter native Twitch/YouTube chat, and other viewers/profiles cannot see them. Use regular tabs in the same Chrome profile for testing.
+- Local demo sends are labeled **You**; native Twitch messages show their actual author. CrossChat sends do not enter native Twitch/YouTube chat, and other viewers/profiles cannot see your local demo sends. Use regular tabs in the same Chrome profile for testing.
 
 ## Browser checklist
 
@@ -85,10 +88,10 @@ A later backend can implement shared rooms across computers. Real chat ingestion
 With Node.js installed:
 
 ```powershell
-node --test tests/prototype.test.cjs tests/twitch-eventsub.test.cjs
+node --test tests/prototype.test.cjs tests/twitch-eventsub.test.cjs tests/twitch-auth.test.cjs tests/twitch-live.test.cjs tests/twitch-ui.test.cjs
 Get-ChildItem src -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```
 
 Simulated messaging/storage/UI tests do not establish Chrome extension lifecycle or live platform compatibility. Complete the browser checklist for those behaviors.
 
-Real Twitch integration preparation and the pending authentication decision are documented in [docs/twitch-integration.md](docs/twitch-integration.md). The prepared EventSub adapter is not yet connected to the extension.
+For Twitch app registration, sign-in setup, current verification limits, and live-chat browser checks, see [docs/twitch-integration.md](docs/twitch-integration.md).

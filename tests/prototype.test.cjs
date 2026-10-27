@@ -29,11 +29,12 @@ test('mock messages cover both platforms; sending is local and validated', () =>
   for (let i = 0; i < 220; i++) chat.send('hello', 'twitch');
   assert.equal(chat.getMessages().length, 200);
 });
-test('manifest references existing local files and requests only storage', () => {
+test('manifest references existing local files and declares Twitch integration permissions', () => {
   const base = path.join(__dirname, '..');
   const manifest = JSON.parse(fs.readFileSync(path.join(base, 'manifest.json'), 'utf8').replace(/^\uFEFF/, ''));
   assert.equal(manifest.manifest_version, 3);
-  assert.deepEqual(manifest.permissions, ['storage']);
+  assert.deepEqual(manifest.permissions, ['storage', 'identity', 'alarms']);
+  assert.deepEqual(manifest.host_permissions, ['https://id.twitch.tv/*', 'https://api.twitch.tv/*']);
   for (const file of [...manifest.content_scripts[0].js, manifest.action.default_popup, manifest.background.service_worker]) assert.ok(fs.existsSync(path.join(base, file)));
 });
 
@@ -256,9 +257,14 @@ test('service worker accepts popup pairing and top-frame requests, rejects other
   const storage = memoryStorage();
   let handler;
   const environment = {
-    URL, console: { warn() {} },
+    URL, URLSearchParams, AbortSignal, console: { warn() {} },
+    fetch: async () => { throw new Error('Unexpected network call in worker test'); },
+    crypto: { getRandomValues: value => value.fill(7) },
+    WebSocket: class {}, setTimeout: () => 1, clearTimeout() {},
     chrome: {
-      storage: { local: storage },
+      storage: { local: storage, session: memoryStorage(), onChanged: { addListener() {} } },
+      identity: { getRedirectURL: () => 'https://test-id.chromiumapp.org/twitch' },
+      alarms: { onAlarm: { addListener() {} }, create() {} },
       runtime: {
         id: 'test-id',
         getURL: file => `chrome-extension://test-id/${file}`,

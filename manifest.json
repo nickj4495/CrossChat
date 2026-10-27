@@ -1,9 +1,11 @@
 ﻿{
   "manifest_version": 3,
   "name": "CrossChat",
-  "version": "0.4.0",
-  "description": "A local mock prototype for unified Twitch and YouTube chat.",
-  "permissions": ["storage"],
+  "version": "0.5.0",
+  "description": "Multi-source CrossChat rooms with read-only Twitch live chat and local demo messaging.",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "identity", "alarms"],
+  "host_permissions": ["https://id.twitch.tv/*", "https://api.twitch.tv/*"],
   "background": { "service_worker": "src/background.js" },
   "action": { "default_popup": "src/popup.html", "default_title": "CrossChat settings" },
   "content_scripts": [{

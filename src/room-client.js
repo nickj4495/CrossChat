@@ -25,7 +25,7 @@
       }
     };
     const changed = (changes, area) => {
-      if (area === 'local' && (changes['roomPair:v1'] ||
+      if (area === 'local' && (changes['roomPair:v1'] || changes['twitchLive:revision'] ||
           changes[`history:v1:${snapshot?.key}`])) refresh();
     };
     chrome.storage.onChanged.addListener(changed);
@@ -40,6 +40,7 @@
     return {
       getMessages: () => snapshot.messages.map(message => ({ ...message })),
       getRoom: () => ({ key: snapshot.key, pair: snapshot.pair }),
+      getLiveStatus: () => snapshot.liveStatus,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       async send(text) {
         const key = snapshot.key;
@@ -50,6 +51,7 @@
             snapshot = next;
             notify(null);
           }
+          await refresh();
           return next.message;
         } catch (error) {
           await refresh();

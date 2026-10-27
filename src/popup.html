@@ -10,5 +10,15 @@
 <div class="actions"><button id="save-pair" type="submit" disabled>Save room</button><button id="clear-pair" type="button" disabled>Disconnect room</button></div>
 <p id="pair-status" role="status">Loading room…</p>
 </form>
-<footer>Local demo in this Chrome profile. Native chats are not connected. Other viewers cannot see these messages yet.</footer><script src="popup.js"></script>
+<section class="twitch-settings" aria-label="Twitch read-only chat">
+<h2>Read Twitch chat</h2>
+<details><summary>First-time Twitch setup</summary><p class="hint">Register an app at <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener noreferrer">Twitch Developer Console</a>. Add this exact OAuth Redirect URL:</p>
+<label for="twitch-callback">Callback URL (click to select)</label><input id="twitch-callback" type="text" readonly aria-label="Twitch OAuth redirect URL">
+<p class="hint">Choose a suitable chat-tool category. Copy the app's public Client ID below. No client secret is needed. Full instructions are in docs/twitch-integration.md in the project.</p></details>
+<label for="twitch-client-id">Public Twitch Client ID</label><input id="twitch-client-id" type="text" disabled autocomplete="off" spellcheck="false" placeholder="Public Client ID, not a client secret">
+<div class="actions"><button id="twitch-sign-in" type="button" disabled>Sign in to Twitch</button><button id="twitch-sign-out" type="button" disabled>Sign out</button></div>
+<button id="twitch-reconnect" type="button" disabled>Reconnect</button>
+<p id="twitch-state" role="status">Checking Twitch…</p><p id="twitch-feedback" role="status"></p>
+</section>
+<footer>Twitch can be read live after sign-in. YouTube and message sending remain local demos in this Chrome profile.</footer><script src="popup.js"></script><script src="twitch-ui.js"></script>
 </body></html>

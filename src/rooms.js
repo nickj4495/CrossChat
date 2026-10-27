@@ -1,5 +1,18 @@
 ﻿(() => {
   const app = globalThis.CrossChat;
+  const sourceFromKey = key => {
+    const platform = key.startsWith('twitch:') ? 'twitch' : 'youtube';
+    const id = key.slice(platform.length + 1);
+    return {
+      key, platform,
+      label: platform === 'twitch' ? id : `YouTube video ${id}`,
+      url: platform === 'twitch' ? `https://www.twitch.tv/${id}` : `https://www.youtube.com/watch?v=${id}`
+    };
+  };
+  const normalizePair = pair => pair ? {
+    ...pair,
+    sources: pair.sources || [sourceFromKey(pair.twitchKey), sourceFromKey(pair.youtubeKey)]
+  } : null;
   app.createRoomService = storage => {
     let pending = Promise.resolve();
     const enqueue = work => {
@@ -7,41 +20,79 @@
       pending = result.catch(() => {});
       return result;
     };
-    const getPair = async () => (await storage.get('roomPair:v1'))['roomPair:v1'] || null;
+    const getPair = async () => normalizePair((await storage.get('roomPair:v1'))['roomPair:v1'] || null);
     const resolve = async href => {
       const context = app.getPageContext(href);
       if (!context) throw new Error('Open a supported Twitch channel or YouTube video.');
       const pair = await getPair();
-      const paired = pair && [pair.twitchKey, pair.youtubeKey].includes(context.key);
+      const paired = pair && pair.sources.some(source => source.key === context.key);
       return { context, pair: paired ? pair : null, key: paired ? pair.key : context.key };
+    };
+    const seeds = sources => {
+      const samples = app.createMockChat().getMessages();
+      return Array.from({ length: Math.max(6, sources.length * 2) }, (_, index) => {
+        const source = sources[index % sources.length];
+        return { ...samples[index % samples.length],
+          text: index % 2 ? 'Hello from this source! 👋 (sample message)' : 'Ready for the next play! (sample message)',
+          time: Date.now() - (Math.max(6, sources.length * 2) - index) * 45000,
+          platform: source.platform, sourceKey: source.key, sourceLabel: source.label };
+      });
+    };
+    const openChat = room => app.createPersistentChat({ key: room.key,
+      initialMessages: room.pair ? seeds(room.pair.sources) : undefined }, storage);
+    const decorate = (messages, room) => messages.map(message => {
+      const sources = room.pair?.sources || [sourceFromKey(room.context.key)];
+      const matches = sources.filter(source => source.platform === message.platform);
+      // Legacy paired histories had at most one source per platform. Never guess
+      // a channel when an old message could belong to several different sources.
+      const source = message.sourceKey ? sources.find(item => item.key === message.sourceKey)
+        : matches.length === 1 ? matches[0] : null;
+      return { ...message,
+        sourceKey: source?.key || message.sourceKey || `demo:${message.platform}`,
+        sourceLabel: source?.label || message.sourceLabel || `Demo ${message.platform} sample` };
+    });
+    const activate = async urls => {
+      if (!Array.isArray(urls) || urls.length < 2 || urls.length > 10) throw new Error('Enter 2–10 stream URLs, one per line.');
+      const sources = urls.map((url, index) => {
+        let context;
+        try { context = app.getPageContext(url); } catch { /* Report the line below. */ }
+        if (!context || context.key.length > 200) throw new Error(`Line ${index + 1}: enter a full Twitch channel or YouTube watch/live URL.`);
+        return sourceFromKey(context.key);
+      });
+      if (new Set(sources.map(source => source.key)).size !== sources.length) throw new Error('Each source must be unique. Remove duplicate channels or videos.');
+      sources.sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0);
+      const twitch = sources.find(source => source.platform === 'twitch');
+      const youtube = sources.find(source => source.platform === 'youtube');
+      // Keep the old key for a Twitch+YouTube pair to preserve its saved history.
+      const key = sources.length === 2 && twitch && youtube
+        ? `room:${twitch.key}:${youtube.key}`
+        : `room:v2:${sources.map(source => source.key).join('|')}`;
+      const pair = { key, sources };
+      if (sources.length === 2 && twitch && youtube) Object.assign(pair, {
+        twitchKey: twitch.key, youtubeKey: youtube.key, twitchUrl: twitch.url, youtubeUrl: youtube.url
+      });
+      await openChat({ key, pair });
+      await storage.set({ 'roomPair:v1': pair });
+      return pair;
     };
     return {
       getPair: () => enqueue(getPair),
+      setSources: urls => enqueue(() => activate(urls)),
+      // Backward-compatible entry point for existing two-platform callers.
       setPair(twitchUrl, youtubeUrl) {
         return enqueue(async () => {
-          const twitch = app.getPageContext(twitchUrl);
-          const youtube = app.getPageContext(youtubeUrl);
-          if (twitch?.platform !== 'twitch' || youtube?.platform !== 'youtube') {
+          if (app.getPageContext(twitchUrl)?.platform !== 'twitch' || app.getPageContext(youtubeUrl)?.platform !== 'youtube') {
             throw new Error('Enter a full Twitch channel URL and a YouTube watch or live URL.');
           }
-          const pair = {
-            key: `room:${twitch.key}:${youtube.key}`,
-            twitchKey: twitch.key, youtubeKey: youtube.key,
-            twitchUrl: `https://www.twitch.tv/${twitch.key.slice(7)}`,
-            youtubeUrl: `https://www.youtube.com/watch?v=${youtube.key.slice(8)}`
-          };
-          // Create/validate the room before activating it. Prior page histories stay intact.
-          await app.createPersistentChat({ key: pair.key }, storage);
-          await storage.set({ 'roomPair:v1': pair });
-          return pair;
+          return activate([twitchUrl, youtubeUrl]);
         });
       },
       clearPair: () => enqueue(() => storage.set({ 'roomPair:v1': null })),
       snapshot(href) {
         return enqueue(async () => {
           const room = await resolve(href);
-          const chat = await app.createPersistentChat({ key: room.key }, storage);
-          return { key: room.key, pair: room.pair, messages: chat.getMessages() };
+          const chat = await openChat(room);
+          return { key: room.key, pair: room.pair, messages: decorate(chat.getMessages(), room) };
         });
       },
       send(href, expectedKey, text) {
@@ -49,10 +100,11 @@
           const room = await resolve(href);
           if (room.key !== expectedKey) throw new Error('Room changed. Check the room shown above and send again.');
           if (typeof text !== 'string') throw new Error('Enter a text message.');
-          const chat = await app.createPersistentChat({ key: room.key }, storage);
-          const message = await chat.send(text, room.context.platform);
+          const chat = await openChat(room);
+          const source = sourceFromKey(room.context.key);
+          const message = await chat.send(text, room.context.platform, source);
           if (!message) throw new Error('Enter a message of 1–500 characters.');
-          return { key: room.key, pair: room.pair, messages: chat.getMessages(), message };
+          return { key: room.key, pair: room.pair, messages: decorate(chat.getMessages(), room), message };
         });
       }
     };

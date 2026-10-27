@@ -2,14 +2,13 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CrossChat settings</title><link rel="stylesheet" href="popup.css"></head>
 <body>
-<h1>CrossChat <span>PROTOTYPE</span></h1><p>One place for two communities.</p>
+<h1>CrossChat <span>PROTOTYPE</span></h1><p>One place for your communities.</p>
 <label class="setting"><span>Enable CrossChat</span><input id="enabled" type="checkbox" role="switch" disabled></label><p id="status" role="status">Loading settings…</p>
 <form id="pair-form">
-<h2>Pair your streams</h2><p class="hint">Connect one Twitch channel and one YouTube video. URL drafts are kept when you close this popup.</p>
-<label for="twitch-url">Twitch channel URL</label><input id="twitch-url" type="url" required placeholder="https://www.twitch.tv/channel">
-<label for="youtube-url">YouTube livestream URL</label><input id="youtube-url" type="url" required placeholder="https://www.youtube.com/watch?v=…">
-<div class="actions"><button id="save-pair" type="submit" disabled>Save pair</button><button id="clear-pair" type="button" disabled>Unpair</button></div>
+<h2>Room sources</h2><p class="hint">Add 2–10 Twitch channels or YouTube videos, one URL per line. Delete a line to remove a source. Drafts survive closing this popup.</p>
+<label for="source-urls">Stream URLs</label><textarea id="source-urls" rows="6" required disabled spellcheck="false" placeholder="https://www.twitch.tv/channel_one&#10;https://www.twitch.tv/channel_two&#10;https://www.youtube.com/watch?v=VIDEO_ID"></textarea>
+<div class="actions"><button id="save-pair" type="submit" disabled>Save room</button><button id="clear-pair" type="button" disabled>Disconnect room</button></div>
 <p id="pair-status" role="status">Loading room…</p>
 </form>
-<footer>Local demo in this Chrome profile. No real chat connection. Existing page histories remain saved separately.</footer><script src="popup.js"></script>
+<footer>Local demo in this Chrome profile. Native chats are not connected. Other viewers cannot see these messages yet.</footer><script src="popup.js"></script>
 </body></html>

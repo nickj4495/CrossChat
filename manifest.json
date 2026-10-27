@@ -1,7 +1,7 @@
 ﻿{
   "manifest_version": 3,
   "name": "CrossChat",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A local mock prototype for unified Twitch and YouTube chat.",
   "permissions": ["storage"],
   "background": { "service_worker": "src/background.js" },

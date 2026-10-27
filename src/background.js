@@ -7,6 +7,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
     const popup = sender.url === chrome.runtime.getURL('src/popup.html');
     if (request.action === 'getPair' && popup) return service.getPair();
     if (request.action === 'setPair' && popup) return service.setPair(request.twitchUrl, request.youtubeUrl);
+    if (request.action === 'setSources' && popup) return service.setSources(request.urls);
     if (request.action === 'clearPair' && popup) return service.clearPair();
     if (!sender.tab || sender.frameId !== 0 ||
         new URL(sender.url).origin !== new URL(request.href).origin) {

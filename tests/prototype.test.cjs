@@ -284,6 +284,8 @@ test('service worker accepts popup pairing and top-frame requests, rejects other
   assert.equal((await invoke({ action: 'snapshot', href: youtubeUrl }, page)).ok, false);
   assert.equal((await invoke({ action: 'snapshot', href: twitchUrl }, { ...page, frameId: 2 })).ok, false);
   assert.equal((await invoke({ action: 'getPair' }, { ...popup, id: 'other-id' })).ok, false);
+  assert.equal((await invoke({ action: 'setSources', urls: [twitchUrl, 'https://www.twitch.tv/beta'] }, popup)).data.sources.length, 2);
+  assert.equal((await invoke({ action: 'setSources', urls: [twitchUrl, youtubeUrl] }, page)).ok, false);
 });
 
 test('panel renders shared updates, sends once, and releases its subscription', async () => {
@@ -337,12 +339,28 @@ test('panel renders shared updates, sends once, and releases its subscription', 
   await nodes.get('form').handlers.submit({ preventDefault() {} });
   assert.equal(nodes.get('.messages').children.length, 8);
   assert.equal(nodes.get('input').value, '');
+  const options = nodes.get('.source-options').children;
+  assert.equal(options.length, 2);
+  const checkbox = options[0].children[0];
+  checkbox.checked = false;
+  checkbox.handlers.change();
+  assert.equal(nodes.get('.messages').children.length, 4);
+  messages.push({ author: 'You', text: 'hidden Twitch message', platform: 'twitch', local: true, time: Date.now() });
+  notify(null);
+  assert.equal(nodes.get('.messages').children.length, 4);
+  checkbox.checked = true;
+  checkbox.handlers.change();
+  assert.equal(nodes.get('.messages').children.length, 9);
+  assert.equal(messages.length, 9);
+  for (const option of options) { option.children[0].checked = false; option.children[0].handlers.change(); }
+  assert.equal(nodes.get('.messages').children.length, 0);
+  assert.equal(nodes.get('.empty').hidden, false);
   panel.destroy();
   assert.equal(unsubscribed, true);
   assert.equal(panel.host.isConnected, false);
 });
 
-test('popup restores partial drafts on reopen, activates only on save, and clears drafts after success', async () => {
+test('multi-source popup restores drafts, migrates old drafts, saves only on submit, and clears on success', async () => {
   const drafts = new Map();
   let pair = null;
   let failSave = false;
@@ -356,8 +374,7 @@ test('popup restores partial drafts on reopen, activates only on save, and clear
       },
       document: { querySelector(selector) {
         if (!nodes.has(selector)) nodes.set(selector, {
-          value: '', handlers: {},
-          addEventListener(type, listener) { this.handlers[type] = listener; }
+          value: '', handlers: {}, addEventListener(type, listener) { this.handlers[type] = listener; }
         });
         return nodes.get(selector);
       } },
@@ -366,7 +383,7 @@ test('popup restores partial drafts on reopen, activates only on save, and clear
         runtime: { async sendMessage(request) {
           if (request.action === 'getPair') return { ok: true, data: pair };
           if (failSave) return { ok: false, error: 'Save failed' };
-          pair = request.action === 'clearPair' ? null : { twitchUrl: request.twitchUrl, youtubeUrl: request.youtubeUrl };
+          pair = request.action === 'clearPair' ? null : { sources: request.urls.map(url => ({ url })) };
           return { ok: true, data: pair };
         } }
       }
@@ -375,43 +392,39 @@ test('popup restores partial drafts on reopen, activates only on save, and clear
     await vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/popup.js'), 'utf8'), environment);
     return nodes;
   }
+  drafts.set('crosschat:pairDraft:v1', JSON.stringify({ twitchUrl, youtubeUrl: '' }));
   let popup = await openPopup();
-  popup.get('#twitch-url').value = twitchUrl;
-  popup.get('#twitch-url').handlers.input();
+  assert.equal(popup.get('#source-urls').value, `${twitchUrl}\n`);
+  const list = `${twitchUrl}\n${youtubeUrl}\nhttps://www.twitch.tv/beta`;
+  popup.get('#source-urls').value = list;
+  popup.get('#source-urls').handlers.input();
   assert.equal(pair, null);
   popup = await openPopup();
-  assert.equal(popup.get('#twitch-url').value, twitchUrl);
-  assert.equal(popup.get('#youtube-url').value, '');
-  popup.get('#youtube-url').value = youtubeUrl;
-  popup.get('#youtube-url').handlers.input();
-  popup = await openPopup();
-  assert.equal(popup.get('#youtube-url').value, youtubeUrl);
+  assert.equal(popup.get('#source-urls').value, list);
   const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
   failSave = true;
   popup.get('#pair-form').handlers.submit({ preventDefault() {} });
   await flush();
-  assert.equal(drafts.size, 1);
+  assert.equal(drafts.has('crosschat:roomDraft:v2'), true);
   assert.equal(pair, null);
   failSave = false;
   popup.get('#pair-form').handlers.submit({ preventDefault() {} });
   await flush();
-  assert.equal(pair.twitchUrl, twitchUrl);
-  assert.equal(pair.youtubeUrl, youtubeUrl);
+  assert.equal(pair.sources.length, 3);
+  assert.equal(pair.sources[2].url, 'https://www.twitch.tv/beta');
   assert.equal(drafts.size, 0);
   popup = await openPopup();
-  assert.equal(popup.get('#twitch-url').value, twitchUrl);
-  popup.get('#twitch-url').value = '';
-  popup.get('#twitch-url').handlers.input();
+  assert.equal(popup.get('#source-urls').value, list);
+  popup.get('#source-urls').value = '';
+  popup.get('#source-urls').handlers.input();
   popup = await openPopup();
-  assert.equal(popup.get('#twitch-url').value, '');
+  assert.equal(popup.get('#source-urls').value, '');
   popup.get('#clear-pair').handlers.click();
   await flush();
   assert.equal(pair, null);
   assert.equal(drafts.size, 0);
-  popup = await openPopup();
-  assert.equal(popup.get('#youtube-url').value, '');
+  assert.equal((await openPopup()).get('#source-urls').value, '');
 });
-
 test('panel recovers after first-render failure, host removal, and fullscreen/tab lifecycle events', async () => {
   let tick;
   let observeRemoval;
@@ -481,4 +494,62 @@ test('panel recovers after first-render failure, host removal, and fullscreen/ta
   host.parentElement = null;
   documentHandlers.visibilitychange();
   assert.equal(host.isConnected, true);
+});
+
+
+test('three Twitch sources share origin-labeled messages; source order does not change history', async () => {
+  const storage = memoryStorage();
+  const service = app.createRoomService(storage);
+  const urls = ['https://www.twitch.tv/alpha', 'https://www.twitch.tv/beta', 'https://www.twitch.tv/gamma'];
+  const room = await service.setSources(urls);
+  assert.equal(room.sources.length, 3);
+  const initial = await service.snapshot(urls[0]);
+  assert.equal(new Set(initial.messages.map(message => message.sourceKey)).size, 3);
+  assert.ok(initial.messages.every(message => message.platform === 'twitch'));
+  await Promise.all(urls.map((url, index) => service.send(url, room.key, `from ${index}`)));
+  for (const url of urls) {
+    const history = await service.snapshot(url);
+    assert.equal(history.messages.length, 9);
+    assert.equal(history.messages.at(-2).sourceKey, 'twitch:beta');
+    assert.equal(history.messages.at(-2).sourceLabel, 'beta');
+  }
+  const reordered = await service.setSources([...urls].reverse());
+  assert.equal(reordered.key, room.key);
+  assert.equal((await service.snapshot(urls[0])).messages.length, 9);
+  await service.setSources([urls[0], youtubeUrl]);
+  assert.equal((await service.snapshot(urls[1])).pair, null);
+  await assert.rejects(service.send(urls[0], room.key, 'old room send'), /Room changed/);
+  await service.setSources(urls);
+  assert.equal((await service.snapshot(urls[0])).messages.length, 9);
+});
+test('multi-source validation rejects duplicates, bad URLs, and limits without changing active room', async () => {
+  const service = app.createRoomService(memoryStorage());
+  const pair = await service.setSources([twitchUrl, youtubeUrl]);
+  for (const urls of [[], [twitchUrl], Array(11).fill(twitchUrl), [twitchUrl, 'bad url'],
+    [twitchUrl, 'https://www.twitch.tv/ALPHA'], [youtubeUrl, 'https://www.youtube.com/live/video123']]) {
+    await assert.rejects(service.setSources(urls));
+    assert.equal((await service.getPair()).key, pair.key);
+  }
+  const urls = Array.from({ length: 10 }, (_, i) => `https://www.youtube.com/watch?v=video${i}`);
+  const maxRoom = await service.setSources(urls);
+  const snapshot = await service.snapshot(urls[0]);
+  assert.equal(maxRoom.sources.length, 10);
+  assert.equal(new Set(snapshot.messages.map(message => message.sourceKey)).size, 10);
+});
+test('legacy pair configuration and history retain the same room and gain source labels', async () => {
+  const storage = memoryStorage();
+  const key = 'room:twitch:alpha:youtube:video123';
+  const messages = app.createMockChat().getMessages();
+  messages.push({ platform: 'youtube', author: 'You', text: 'legacy message', time: Date.now(), local: true });
+  storage.data['roomPair:v1'] = { key, twitchKey: 'twitch:alpha', youtubeKey: 'youtube:video123', twitchUrl, youtubeUrl };
+  storage.data[`history:v1:${key}`] = { version: 1, messages };
+  const service = app.createRoomService(storage);
+  assert.equal((await service.getPair()).sources.length, 2);
+  const history = await service.snapshot(youtubeUrl);
+  assert.equal(history.key, key);
+  assert.equal(history.messages.length, 7);
+  assert.equal(history.messages.at(-1).sourceKey, 'youtube:video123');
+  assert.equal(history.messages.at(-1).text, 'legacy message');
+  assert.equal((await service.setSources([youtubeUrl, twitchUrl])).key, key);
+  assert.equal((await service.snapshot(twitchUrl)).messages.length, 7);
 });

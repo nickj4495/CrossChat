@@ -26,10 +26,11 @@
     ].map(([platform, author, text], index) => ({ platform, author, text, time: now - (6 - index) * 45000, local: false }));
     return {
       getMessages: () => messages.map(message => ({ ...message })),
-      send(text, platform) {
+      send(text, platform, source = null) {
         const clean = text.trim();
         if (!clean || clean.length > 500 || !['twitch', 'youtube'].includes(platform)) return null;
         const message = { platform, author: 'You', text: clean, time: Date.now(), local: true };
+        if (source) Object.assign(message, { sourceKey: source.key, sourceLabel: source.label });
         messages.push(message);
         if (messages.length > 200) messages.shift();
         return { ...message };

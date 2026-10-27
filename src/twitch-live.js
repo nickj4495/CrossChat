@@ -75,7 +75,7 @@
               dispose(previous); previous = null;
               attempts = 0;
               const liveCount = status.sources.filter(source => source.state === 'live').length;
-              update(liveCount === status.sources.length ? 'live' : 'partial', "Reading Twitch chat. YouTube remains demo-only.");
+              update(liveCount === status.sources.length ? 'live' : 'partial', "Reading Twitch chat.");
               return;
             }
             const results = await Promise.all(users.map(async user => {
@@ -106,7 +106,7 @@
               return;
             }
             attempts = 0;
-            update(count === sources.length ? 'live' : 'partial', `Reading ${count}/${sources.length} Twitch chats. YouTube remains demo-only.`, sources);
+            update(count === sources.length ? 'live' : 'partial', `Reading ${count}/${sources.length} Twitch chats.`, sources);
           } else if (kind === 'notification') {
             const sub = frame.payload?.subscription;
             const allowed = subscriptions.get(sub?.id);

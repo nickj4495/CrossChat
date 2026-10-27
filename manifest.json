@@ -1,11 +1,15 @@
 ﻿{
   "manifest_version": 3,
   "name": "CrossChat",
-  "version": "0.6.0",
-  "description": "Multi-source CrossChat rooms with read-only Twitch live chat and local demo messaging.",
+  "version": "0.7.0",
+  "description": "Read-only Twitch and YouTube chats in one CrossChat room, with local demo messaging.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "identity", "alarms"],
-  "host_permissions": ["https://id.twitch.tv/*", "https://api.twitch.tv/*"],
+  "host_permissions": ["https://id.twitch.tv/*", "https://api.twitch.tv/*", "https://www.googleapis.com/*"],
+  "oauth2": {
+    "client_id": "YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com",
+    "scopes": ["https://www.googleapis.com/auth/youtube.readonly"]
+  },
   "background": { "service_worker": "src/background.js" },
   "action": { "default_popup": "src/popup.html", "default_title": "CrossChat settings" },
   "content_scripts": [{

@@ -20,5 +20,15 @@
 <button id="twitch-reconnect" type="button" disabled>Reconnect</button>
 <p id="twitch-state" role="status">Checking Twitch…</p><p id="twitch-feedback" role="status"></p>
 </section>
-<footer>Twitch can be read live after sign-in. YouTube and message sending remain local demos in this Chrome profile.</footer><script src="popup.js"></script><script src="twitch-ui.js"></script>
+<section class="twitch-settings" aria-label="YouTube read-only chat">
+<h2>Read YouTube chat</h2>
+<details><summary>First-time Google setup</summary><p class="hint">Enable YouTube Data API v3 in Google Cloud. Create a Chrome Extension OAuth client with this Item ID:</p>
+<label for="google-extension-id">Extension ID (click to select)</label><input id="google-extension-id" type="text" readonly>
+<p class="hint">Put the public Google Client ID in manifest.json → oauth2.client_id, then reload CrossChat. No client secret or API key. Setup instructions: docs/youtube-integration.md.</p></details>
+<div class="actions"><button id="youtube-connect" type="button" disabled>Sign in to Google</button><button id="youtube-disconnect" type="button" disabled>Disconnect</button></div>
+<p class="hint">Reading checks about every 15 seconds or slower and uses Google project quota. Stops after 30 minutes or 300 chat requests.</p>
+<div class="actions"><button id="youtube-start" type="button" disabled>Start reading</button><button id="youtube-stop" type="button" disabled>Stop</button></div>
+<p id="youtube-state" role="status">Checking YouTube…</p><p id="youtube-feedback" role="status"></p>
+</section>
+<footer>Twitch and YouTube support read-only live chat after setup. Message sending remains a local demo in this Chrome profile.</footer><script src="popup.js"></script><script src="twitch-ui.js"></script><script src="youtube-ui.js"></script>
 </body></html>

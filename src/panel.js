@@ -64,7 +64,8 @@
       if (!message.local) {
         const kind = document.createElement('span');
         kind.className = 'local';
-        kind.textContent = message.origin === 'twitch-eventsub' ? 'Live Twitch message · received this session' : 'Sample message';
+        kind.textContent = message.origin === 'twitch-eventsub' ? 'Live Twitch message · received this session'
+          : message.origin === 'youtube-api' ? 'Live YouTube message · received this session' : 'Sample message';
         row.append(kind);
       }
       log.append(row);
@@ -83,9 +84,10 @@
         return;
       }
       const live = provider.getLiveStatus?.();
-      root.querySelector('.connection').textContent = live
-        ? [live.message, ...(live.sources || []).filter(source => source.state === 'error').map(source => `${source.label}: ${source.message}`)].join('\n')
-        : 'Local demo. Sign in through the extension popup for read-only Twitch chat.';
+      const youtube = provider.getYouTubeStatus?.();
+      const connectionLines = [live, youtube].filter(Boolean).flatMap(providerStatus => [providerStatus.message,
+        ...(providerStatus.sources || []).filter(source => source.state === 'error').map(source => `${source.label}: ${source.message}`)]);
+      root.querySelector('.connection').textContent = connectionLines.join('\n') || 'Connect a platform through the extension popup for read-only live chat.';
       const messages = provider.getMessages();
       const room = provider.getRoom();
       if (room.key !== filterRoomKey) {
@@ -94,12 +96,15 @@
         filterSignature = null;
       }
       const sources = new Map((room.pair?.sources || []).map(source => [source.key, source]));
+      for (const source of youtube?.sources || []) {
+        if (sources.has(source.key)) sources.set(source.key, { ...sources.get(source.key), label: source.label });
+      }
       messages.forEach(message => {
         const key = message.sourceKey || `demo:${message.platform}`;
         if (!sources.has(key)) sources.set(key, { key, platform: message.platform,
           label: message.sourceLabel || `Demo ${message.platform} sample` });
       });
-      const signature = JSON.stringify([...sources.keys()]);
+      const signature = JSON.stringify([...sources.values()].map(source => [source.key, source.label]));
       if (signature !== filterSignature) {
         const options = root.querySelector('.source-options');
         options.replaceChildren();

@@ -41,6 +41,7 @@
       getMessages: () => snapshot.messages.map(message => ({ ...message })),
       getRoom: () => ({ key: snapshot.key, pair: snapshot.pair }),
       getLiveStatus: () => snapshot.liveStatus,
+      getYouTubeStatus: () => snapshot.youtubeStatus,
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       async send(text) {
         const key = snapshot.key;

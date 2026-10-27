@@ -1,6 +1,6 @@
 ﻿# Twitch read-only integration — setup and validation
 
-The extension now implements OAuth sign-in and an EventSub WebSocket reader for the Twitch channels in your active room. YouTube ingestion and native chat posting remain unimplemented. Local demo sending continues separately.
+The extension now implements OAuth sign-in and an EventSub WebSocket reader for the Twitch channels in your active room. YouTube has a separate read-only integration described in [youtube-integration.md](youtube-integration.md). Native chat posting remains unimplemented. Local demo sending continues separately.
 
 Live Twitch chat has been reported working in Chrome by the user. Automated tests use fake OAuth/API/WebSocket responses. A direct public WebSocket check received `session_welcome`, and example emote CDN URLs returned PNG images. Those endpoint checks do not verify emote display/layout inside Twitch or YouTube; use the browser checklist below.
 
@@ -14,7 +14,7 @@ Live Twitch chat has been reported working in Chrome by the user. Automated test
 6. Open **Manage** for the registered app and copy its **Client ID**.
 7. Paste that public Client ID into CrossChat's **Public Twitch Client ID** field. Do not paste a client secret or token. You do not need to generate a secret for this implementation.
 8. Click **Sign in to Twitch**. Complete the Twitch window and consent to read-chat access. The toolbar popup may close when sign-in opens; reopen it afterward to see the result.
-9. Save a CrossChat room containing at least two sources, including the Twitch channels you want to read. An all-Twitch room is supported. A mixed room can show incoming Twitch messages while YouTube sources remain local demos.
+9. Save a CrossChat room containing at least two sources, including the Twitch channels you want to read. An all-Twitch room is supported. A mixed room can show incoming Twitch messages alongside YouTube after its separate Google setup and Start reading action.
 10. Open one of the room's pages and watch for **Reading N/N Twitch chats**. New native messages should appear labeled **Live Twitch message · received this session**, with their author and source channel. You do not need to keep the other channel tabs open.
 
 Twitch documents app registration and public Client IDs in [Register Your App](https://dev.twitch.tv/docs/authentication/register-app/). This implementation uses the [implicit grant flow](https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/#implicit-grant-flow) for a serverless browser client, requesting only `user:read:chat`. It does not request write permission or use a client secret.
@@ -63,7 +63,7 @@ This uses actual message fragments rather than matching emote names against a gl
 - [ ] Check an animated Twitch emote where available. With reduced motion enabled, check static rendering (or readable fallback if unavailable).
 - [ ] Filter the emote's source off/on and confirm emote messages return correctly. Verify a message without emote metadata stays literal text.
 - [ ] In DevTools, block `*static-cdn.jtvnw.net/emoticons/*` before receiving a new emote message: the emote name should appear as fallback. Remove the block afterward.
-- [ ] Use the same room on a YouTube page: incoming Twitch messages and emote images should appear there, with YouTube clearly remaining demo-only. If the site or an image blocker prevents a CDN load, check the text fallback.
+- [ ] Use the same room on a YouTube page: incoming Twitch messages and emote images should appear there, alongside any YouTube messages enabled through its separate integration. If the site or an image blocker prevents a CDN load, check the text fallback.
 - [ ] Send a CrossChat demo message: it appears in your local room only, stays labeled as a demo, and does not post into native Twitch chat.
 - [ ] Hide/show sources, refresh tabs, navigate, collapse/expand, and test player-keyboard isolation.
 - [ ] Where you can moderate a test channel, delete a test message, clear a user's messages, and clear chat. Verify the corresponding native messages disappear from CrossChat without affecting other sources or local demo messages.
@@ -76,7 +76,7 @@ This uses actual message fragments rather than matching emote names against a gl
 ## Automated checks
 
 ```powershell
-node --test tests/prototype.test.cjs tests/twitch-eventsub.test.cjs tests/twitch-auth.test.cjs tests/twitch-live.test.cjs tests/twitch-ui.test.cjs tests/twitch-emotes.test.cjs
+node --test
 Get-ChildItem src -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```
 

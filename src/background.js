@@ -1,7 +1,9 @@
-﻿importScripts('mock-chat.js', 'history.js', 'rooms.js', 'twitch-emotes.js', 'twitch-eventsub.js', 'twitch-auth.js', 'twitch-buffer.js', 'twitch-live.js');
+﻿importScripts('mock-chat.js', 'history.js', 'rooms.js', 'twitch-emotes.js', 'twitch-eventsub.js', 'twitch-auth.js', 'twitch-buffer.js', 'twitch-live.js', 'youtube-auth.js', 'youtube-messages.js', 'youtube-live.js');
 const service = CrossChat.createRoomService(chrome.storage.local);
 let twitchAuth = null;
 let twitchLive = null;
+let youtubeAuth = null;
+let youtubeLive = null;
 let publishTimer = null;
 let revision = 0;
 const publish = () => {
@@ -19,9 +21,23 @@ const initializeTwitch = () => {
       local: chrome.storage.local, publish });
   }
 };
+const initializeYouTube = () => {
+  if (!youtubeAuth) {
+    youtubeAuth = CrossChat.createYouTubeAuth({ identity: chrome.identity, session: chrome.storage.session,
+      manifest: () => ({ ...(chrome.runtime.getManifest?.() || {}), extensionId: chrome.runtime.id }) });
+    youtubeLive = CrossChat.createYouTubeLive({ auth: youtubeAuth, service, local: chrome.storage.local,
+      session: chrome.storage.session, publish });
+  }
+};
+const withLive = snapshot => {
+  const native = [...(twitchLive?.getMessages(snapshot.key) || []), ...(youtubeLive?.getMessages(snapshot.key) || [])];
+  return { ...snapshot, messages: [...snapshot.messages, ...native].sort((a, b) => a.time - b.time).slice(-200),
+    liveStatus: twitchLive?.getStatus(snapshot.key), youtubeStatus: youtubeLive?.getStatus(snapshot.key) };
+};
 const synchronize = (restart = false) => {
   initializeTwitch();
-  return twitchLive.sync(restart);
+  initializeYouTube();
+  return Promise.all([twitchLive.sync(restart), youtubeLive.sync()]);
 };
 chrome.runtime.onMessage.addListener((request, sender, respond) => {
   if (request?.scope !== 'crosschat') return;
@@ -37,22 +53,35 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
         return result;
       }
       if (request.action === 'getTwitchState') {
-        await synchronize();
+        initializeTwitch(); await twitchLive.sync();
         return { auth: await twitchAuth.state(), live: twitchLive.getStatus() };
       }
       if (request.action === 'twitchSignIn') {
         initializeTwitch();
         const result = await twitchAuth.signIn(request.clientId);
-        await synchronize(true);
+        await twitchLive.sync(true);
         return result;
       }
       if (request.action === 'twitchSignOut') {
         initializeTwitch(); twitchLive.stop();
         const result = await twitchAuth.signOut();
-        await synchronize();
+        await twitchLive.sync();
         return result;
       }
-      if (request.action === 'twitchReconnect') { await synchronize(true); return twitchLive.getStatus(); }
+      if (request.action === 'getYouTubeState') {
+        initializeYouTube(); await youtubeLive.sync();
+        return { auth: await youtubeAuth.state(), live: youtubeLive.getStatus() };
+      }
+      if (request.action === 'youtubeSignIn') {
+        initializeYouTube(); return youtubeAuth.signIn();
+      }
+      if (request.action === 'youtubeSignOut') {
+        initializeYouTube(); await youtubeLive.pause('Signed out of YouTube.');
+        return youtubeAuth.signOut();
+      }
+      if (request.action === 'youtubeStart') { initializeYouTube(); return youtubeLive.start(); }
+      if (request.action === 'youtubeStop') { initializeYouTube(); await youtubeLive.pause(); return { stopped: true }; }
+      if (request.action === 'twitchReconnect') { initializeTwitch(); await twitchLive.sync(true); return twitchLive.getStatus(); }
     }
     if (!sender.tab || sender.frameId !== 0 ||
         new URL(sender.url).origin !== new URL(request.href).origin) {
@@ -62,15 +91,11 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
       const snapshot = await service.snapshot(request.href);
       // Start/recover the connection without making panel loading wait for APIs.
       synchronize().catch(() => {});
-      const live = twitchLive.getMessages(snapshot.key);
-      return { ...snapshot, messages: [...snapshot.messages, ...live].sort((a, b) => a.time - b.time).slice(-200),
-        liveStatus: twitchLive.getStatus(snapshot.key) };
+      return withLive(snapshot);
     }
     if (request.action === 'send') {
       const snapshot = await service.send(request.href, request.key, request.text);
-      const live = twitchLive?.getMessages(snapshot.key) || [];
-      return { ...snapshot, messages: [...snapshot.messages, ...live].sort((a, b) => a.time - b.time).slice(-200),
-        liveStatus: twitchLive?.getStatus(snapshot.key) };
+      return withLive(snapshot);
     }
     throw new Error('Unknown CrossChat action.');
   };
@@ -83,6 +108,7 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && (changes['roomPair:v1'] || changes.enabled)) {
     twitchLive?.stop();
+    youtubeLive?.stop();
     synchronize().catch(() => {});
   }
 });

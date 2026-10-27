@@ -1,7 +1,7 @@
 ﻿{
   "manifest_version": 3,
   "name": "CrossChat",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Read-only Twitch and YouTube chats in one CrossChat room, with local demo messaging.",
   "minimum_chrome_version": "116",
   "permissions": ["storage", "identity", "alarms"],
@@ -14,7 +14,7 @@
   "action": { "default_popup": "src/popup.html", "default_title": "CrossChat settings" },
   "content_scripts": [{
     "matches": ["https://www.twitch.tv/*", "https://www.youtube.com/*"],
-    "js": ["src/mock-chat.js", "src/view-model.js", "src/view-controls.js", "src/room-client.js", "src/twitch-emotes.js", "src/chat-scroll.js", "src/panel.js", "src/content.js"],
+    "js": ["src/platform.js", "src/mock-chat.js", "src/view-model.js", "src/view-controls.js", "src/room-client.js", "src/twitch-emotes.js", "src/chat-scroll.js", "src/panel.js", "src/content.js"],
     "run_at": "document_idle"
   }]
 }

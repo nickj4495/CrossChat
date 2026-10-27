@@ -1,5 +1,5 @@
 ﻿importScripts('mock-chat.js', 'view-model.js', 'history.js', 'rooms.js', 'twitch-emotes.js', 'twitch-eventsub.js', 'twitch-auth.js', 'twitch-buffer.js', 'twitch-live.js', 'youtube-auth.js', 'youtube-messages.js', 'youtube-live.js', 'stream-directory.js');
-importScripts('youtube-backend.js', 'youtube-router.js');
+importScripts('platform.js', 'youtube-backend.js', 'youtube-router.js', 'browser-auth.js');
 const service = CrossChat.createRoomService(chrome.storage.local);
 const viewSettings = CrossChat.createViewSettings(chrome.storage.local);
 let streamDirectory = null;
@@ -19,24 +19,24 @@ const publish = () => {
 const initializeTwitch = () => {
   if (!twitchAuth) {
     twitchAuth = CrossChat.createTwitchAuth({ local: chrome.storage.local,
-      session: chrome.storage.session, identity: chrome.identity });
+      session: CrossChat.session, identity: CrossChat.createBrowserIdentity({ api: chrome, session: CrossChat.session }) });
     twitchLive = CrossChat.createTwitchLive({ auth: twitchAuth, service,
       local: chrome.storage.local, publish });
   }
 };
 const initializeYouTube = () => {
   if (!youtubeAuth) {
-    youtubeAuth = CrossChat.createYouTubeAuth({ identity: chrome.identity, session: chrome.storage.session,
+    youtubeAuth = CrossChat.createYouTubeAuth({ identity: CrossChat.createBrowserIdentity({ api: chrome, session: CrossChat.session }), session: CrossChat.session,
       manifest: () => ({ ...(chrome.runtime.getManifest?.() || {}), extensionId: chrome.runtime.id }) });
-    const dependencies = { auth: youtubeAuth, service, local: chrome.storage.local, session: chrome.storage.session, publish };
+    const dependencies = { auth: youtubeAuth, service, local: chrome.storage.local, session: CrossChat.session, publish };
     youtubeLive = CrossChat.createYouTubeRouter({ polling: CrossChat.createYouTubeLive(dependencies),
-      createBackend: () => CrossChat.createYouTubeBackend(dependencies), session: chrome.storage.session, publish });
+      createBackend: () => CrossChat.createYouTubeBackend(dependencies), session: CrossChat.session, publish });
   }
 };
 const getDirectory = () => {
   initializeTwitch(); initializeYouTube();
   if (!streamDirectory) streamDirectory = CrossChat.createStreamDirectory({ service,
-    getTwitch: () => twitchAuth, getYouTube: () => youtubeAuth, session: chrome.storage.session, publish });
+    getTwitch: () => twitchAuth, getYouTube: () => youtubeAuth, session: CrossChat.session, publish });
   return streamDirectory;
 };
 const roomView = async force => {

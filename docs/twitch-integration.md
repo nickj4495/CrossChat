@@ -83,3 +83,4 @@ Get-ChildItem src -Filter *.js | ForEach-Object { node --check $_.FullName }
 Fixtures and simulated services test behavior without tokens. They do not replace a real Chrome OAuth/API/subscription test with your registered application.
 
 The popup now separates **Your room** and **Connections**. Stream links/status, groups, colors, widget sizing, and scroll behavior are documented in [room-workspace.md](room-workspace.md).
+For Firefox's native Identity callback and Safari's backend authorization-code fallback, see [Browser setup](browser-support.md). Add the callback shown by each browser to your Twitch app; do not replace a working Chrome callback. Safari still needs real Mac/browser verification.

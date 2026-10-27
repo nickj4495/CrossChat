@@ -2,6 +2,8 @@
 
 This milestone implements an official YouTube Data API reader alongside Twitch. It uses Google OAuth through Chrome's Identity API, not page scraping or your Twitch credentials. Google sign-in and live reading are separate actions. Message sending remains a local demo; CrossChat does not post into either native chat.
 
+This page's client setup is for Chrome. Firefox/Safari use the new backend Web application OAuth client flow in [Browser setup](browser-support.md); the Chrome client ID is not reusable as a Web application client. That guide also separates what has been tested from remaining live/Safari checks.
+
 Google sign-in and native YouTube polling messages have been reported working in Chrome. The new optional local streaming transport has local gRPC/WebSocket fixture coverage and still needs live Google/browser verification. Follow [Local streaming setup](local-backend.md) to try it; the instructions below cover Google setup and the direct-polling fallback.
 
 ## Create the Google OAuth client
@@ -54,7 +56,7 @@ Google recommends [streamList](https://developers.google.com/youtube/data/live/r
 
 ## Data, moderation, and lifecycle
 
-- Chrome manages Google access tokens. The extension stores a connected flag, not token values, in `chrome.storage.session`. In direct mode tokens are used inside the worker for Authorization headers; local streaming passes a token only to the authenticated loopback backend, which keeps it in RAM for Google requests. Tokens are never returned to content scripts, placed in request URLs, written to project files, or saved in message histories. Transport/key/cursor session settings are covered in the local backend guide.
+- Chrome manages Google access tokens; its reader stores a connected flag, not token values, in `chrome.storage.session`. Firefox/Safari's backend-mediated sign-in stores access tokens only in trusted session storage or background memory. In direct mode tokens are used inside the worker for Authorization headers; local streaming passes a token only to the authenticated loopback backend, which keeps it in RAM for Google requests. Tokens are never returned to content scripts, placed in request URLs, written to project files, or saved in message histories. Transport/key/cursor session settings are covered in the local backend guide.
 - Noninteractive token access is used only after explicit sign-in. The cache handles expiry; unauthorized responses clear the connection and require sign-in. Google authorization is independent of Twitch authorization.
 - Disconnect clears local cached Google tokens for this extension; it does not sign you out of Chrome or revoke the app's Google account grant. Remove that grant in Google Account's third-party access settings if desired.
 - Reloading/disabling the extension or restarting Chrome clears the extension session flags/run state. Connect/start again; Chrome may reuse a previously approved grant rather than showing consent again. Saved rooms, local demo history, and the manifest's public Client ID remain.

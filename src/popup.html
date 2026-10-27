@@ -16,6 +16,7 @@
 <p id="room-feedback" role="status"></p>
 </section>
 <section id="pane-connections" role="tabpanel" aria-labelledby="tab-connections" hidden>
+<details class="twitch-settings"><summary>Local backend connection setup</summary><label for="backend-origin">Extension origin (click to select)</label><input id="backend-origin" type="text" readonly><p class="hint">Paste this exact origin when starting the local backend. Then save its connection key under Read YouTube chat. Firefox and Safari Google sign-in also require backend OAuth setup: docs/browser-support.md.</p></details>
 <section class="twitch-settings" aria-label="Twitch read-only chat">
 <h2>Read Twitch chat</h2>
 <details><summary>First-time Twitch setup</summary><p class="hint">Register an app at <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener noreferrer">Twitch Developer Console</a>. Add this exact OAuth Redirect URL:</p>
@@ -28,7 +29,8 @@
 </section>
 <section class="twitch-settings" aria-label="YouTube read-only chat">
 <h2>Read YouTube chat</h2>
-<details><summary>First-time Google setup</summary><p class="hint">Enable YouTube Data API v3 in Google Cloud. Create a Chrome Extension OAuth client with this Item ID:</p>
+<p id="portable-auth-hint" class="hint" hidden>Google sign-in in this browser uses the local backend. Save its connection key first. Configure a Google Web application OAuth client in the backend environment as described in docs/browser-support.md. Access expires after about one hour; sign in again when asked.</p>
+<details id="google-chrome-setup"><summary>First-time Google setup (Chrome)</summary><p class="hint">Enable YouTube Data API v3 in Google Cloud. Create a Chrome Extension OAuth client with this Item ID:</p>
 <label for="google-extension-id">Extension ID (click to select)</label><input id="google-extension-id" type="text" readonly>
 <p class="hint">Put the public Google Client ID in manifest.json → oauth2.client_id, then reload CrossChat. No client secret or API key. Setup instructions: docs/youtube-integration.md.</p></details>
 <div class="actions"><button id="youtube-connect" type="button" disabled>Sign in to Google</button><button id="youtube-disconnect" type="button" disabled>Disconnect</button></div>
@@ -47,5 +49,5 @@
 </section>
 </main>
 <footer>Read-only platform chat. Sending stays a local demo. Stream-status checks use platform APIs and refresh at most about once a minute.</footer>
-<script src="view-model.js"></script><script src="view-controls.js"></script><script src="popup.js"></script><script src="room-ui.js"></script><script src="twitch-ui.js"></script><script src="youtube-ui.js"></script>
+<script src="platform.js"></script><script src="view-model.js"></script><script src="view-controls.js"></script><script src="popup.js"></script><script src="room-ui.js"></script><script src="twitch-ui.js"></script><script src="youtube-ui.js"></script>
 </body></html>

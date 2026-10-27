@@ -29,7 +29,7 @@ This removes CrossChat's intentional 15-second polling wait. It does not guarant
 6. Open CrossChat **Connections → Read YouTube chat**. Choose **Local streaming (requires backend)**. Paste that connection key into **Local backend connection key** and click **Save reader settings**. Saving settings stops the previous reader; it does not start reading.
 7. Sign in to Google if disconnected. Save a room containing an active YouTube live video, then click **Start reading**. Check the per-source status and open any room stream page.
 
-The popup may close while you copy the terminal key. Copy it first, then reopen the popup, select Local streaming, paste, and save. You only paste one key; Google tokens are handled by the extension. Leave the key field blank when saving later to keep the session's existing key.
+The popup may close while you copy the terminal key. Copy it first, then reopen the popup, select Local streaming, paste, and save. You only paste one key; Google tokens are handled by the extension. Leave the key field blank when saving later to keep the session's existing key. Firefox/Safari use their full extension origin instead of a Chrome ID, and a backend OAuth flow for Google: see [Browser setup](browser-support.md).
 
 For terminals without an interactive prompt, supply the extension ID before starting:
 
@@ -53,9 +53,9 @@ Group/source visibility filters do not stop readers. Stop ends the selected YouT
 
 ## Scope and security
 
-- This is a **local development backend**, not hosted infrastructure. It listens only on IPv4 loopback, not your LAN or the internet. Chrome is the tested browser; other browsers and their OAuth flows remain unverified.
-- The WebSocket upgrade requires the exact configured `chrome-extension://` Origin, the loopback Host, and a mutual HMAC challenge using the random connection key. The key itself is not sent over the socket. Do not expose this port through a proxy/tunnel or deploy this prototype as a public service.
-- Google access tokens travel only from the background worker to this local process and onward to Google over TLS. Tokens remain in RAM and are never logged, returned to content scripts, or saved in extension storage, files, or chat history. Local WebSocket traffic is unencrypted loopback traffic; use only a backend/process you trust on your machine.
+- This is a **local development backend**, not hosted infrastructure. It listens only on IPv4 loopback, not your LAN or the internet. Chrome's live feed has been reported working. Firefox has real extension/UI/local-handshake coverage; portable Google consent still needs a configured client/browser test. Safari requires Mac validation.
+- The WebSocket upgrade requires the exact configured `chrome-extension://`, `moz-extension://`, or `safari-web-extension://` Origin, the loopback Host, and a mutual HMAC challenge using the random connection key. The key itself is not sent over the socket. Do not expose this port through a proxy/tunnel or deploy this prototype as a public service.
+- Google access tokens travel only from the background worker to this local process and onward to Google over TLS. Tokens remain in RAM and are never logged, returned to content scripts, or saved in durable storage, files, or chat history. Chrome manages its token cache; Firefox/Safari use trusted session storage or background memory. Local WebSocket traffic is unencrypted loopback traffic; use only a backend/process you trust on your machine.
 - The connection key and active-run/cursor data use Chrome session storage, inaccessible to content scripts by default. Popup/public state exposes only whether a key is configured, not its value. The extension uses a fixed local endpoint; content scripts cannot change transport, configure the backend, or request a token.
 - The backend uses three pinned dependencies: `@grpc/grpc-js`, `@grpc/proto-loader`, and `ws`. The extension has no runtime dependencies. Identical token/chat subscriptions may share one upstream connection; unrelated tokens are isolated. Cross-viewer access rules and shared hosted rooms are future work.
 - Sending is still a local demo. This milestone does not post to YouTube/Twitch or sync demo messages across computers.

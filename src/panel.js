@@ -66,7 +66,7 @@
       const origin = document.createElement('span'); origin.className = 'source';
       const body = document.createElement('p'); body.className = 'text'; app.renderMessageBody(body, message);
       const kind = document.createElement('span'); kind.className = 'local';
-      kind.textContent = message.local ? 'Local demo · visible in your Chrome profile' : message.origin === 'twitch-eventsub' ? 'Live Twitch' : message.origin === 'youtube-api' ? 'Live YouTube' : 'Sample message';
+      kind.textContent = message.local ? 'Local demo · visible in your browser profile' : message.origin === 'twitch-eventsub' ? 'Live Twitch' : message.origin === 'youtube-api' ? 'Live YouTube' : 'Sample message';
       row.append(meta, origin, body, kind);
       return { row, origin };
     };

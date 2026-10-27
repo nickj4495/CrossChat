@@ -8,7 +8,7 @@ test('worker merges Twitch, YouTube, and local messages while restricting Google
     author: 'Viewer', text: `${platform} native message`, sourceKey: platform === 'twitch' ? 'twitch:alpha' : 'youtube:video',
     time: timestamp + offset, local: false });
   const environment = {
-    URL, URLSearchParams, setTimeout: () => 1,
+    URL, URLSearchParams, structuredClone, setTimeout: () => 1,
     chrome: {
       storage: { local: {
         async get(key) { return typeof key === 'object' ? key : { [key]: data[key] }; },

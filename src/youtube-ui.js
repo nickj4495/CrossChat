@@ -12,6 +12,9 @@
   const keyState = document.querySelector('#youtube-backend-key-state');
   const saveReader = document.querySelector('#youtube-reader-save');
   const readerHint = document.querySelector('#youtube-reader-hint');
+  const backendOrigin = document.querySelector('#backend-origin');
+  backendOrigin.value = globalThis.CrossChat?.extensionOrigin || '';
+  backendOrigin.addEventListener('click', () => backendOrigin.select());
   let dirty = false;
   const showReader = () => {
     backendSettings.hidden = transport.value !== 'local';
@@ -29,9 +32,11 @@
     if (loading) return; loading = true;
     try {
       const state = await request('getYouTubeState');
+      document.querySelector('#portable-auth-hint').hidden = !state.auth.portable;
+      document.querySelector('#google-chrome-setup').hidden = Boolean(state.auth.portable);
       if (!dirty) transport.value = state.transport?.mode || 'polling';
       showReader();
-      keyState.textContent = state.transport?.keyConfigured ? 'Connection key saved for this Chrome session. Leave blank to keep it.' : 'No key saved. Paste the key, then save settings.';
+      keyState.textContent = state.transport?.keyConfigured ? 'Connection key saved for this browser session. Leave blank to keep it.' : 'No key saved. Paste the key, then save settings.';
       saveReader.disabled = busy; transport.disabled = busy; backendKey.disabled = busy;
       extensionId.value = state.auth.extensionId;
       connect.disabled = busy || state.auth.signingIn || !state.auth.configured;

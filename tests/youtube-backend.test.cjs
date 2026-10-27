@@ -23,7 +23,8 @@ function harness() {
   const flush = () => new Promise(resolve => setTimeout(resolve, 15));
   const handshake = async (socket = sockets.at(-1), wrong = false) => {
     socket.open(); const nonce = socket.sent.at(-1).nonce;
-    socket.receive({ type: 'hello', protocol: 1, challenge: 'c'.repeat(64), proof: proof(wrong ? 'wrong' : connectionKey, 'server:' + nonce) }); await flush();
+    socket.receive({ type: 'hello', protocol: 1, challenge: 'c'.repeat(64), proof: proof(wrong ? 'wrong' : connectionKey, 'server:' + nonce) });
+    for (let i = 0; i < 100 && !socket.sent.some(data => data.type === 'join') && live.getStatus().state !== 'error'; i++) await flush();
   };
   const fire = async ms => { const found = [...timers].find(([, timer]) => timer.ms === ms); assert.ok(found, `No timer at ${ms}ms`); timers.delete(found[0]); clock += ms; found[1].fn(); await flush(); };
   const item = (id, type = 'textMessageEvent', extra = {}) => ({ id, snippet: { liveChatId: 'chat-A', publishedAt: '2026-10-27T09:00:00Z', type, textMessageDetails: { messageText: 'native text' }, ...extra }, authorDetails: { displayName: 'Viewer', channelId: 'user-A' } });

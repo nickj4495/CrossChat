@@ -1,6 +1,8 @@
-# CrossChat — milestone 9: local YouTube streaming
+# CrossChat — milestone 10: Firefox and Safari development builds
 
-CrossChat aims to combine live chats for streamers and viewers. This vanilla-JavaScript Manifest V3 extension supports a shared local room across **2–10 Twitch channels and/or YouTube videos in one Chrome profile**. It implements Twitch OAuth/EventSub with native emote images and Google OAuth/YouTube chat, using direct polling or an optional local Node.js streaming backend. Message sending remains a local demo. Cross-device CrossChat rooms are not implemented.
+CrossChat aims to combine live chats for streamers and viewers. This vanilla-JavaScript Manifest V3 extension supports a shared local room across **2–10 Twitch channels and/or YouTube videos in one browser profile**. It implements Twitch OAuth/EventSub with native emote images and Google OAuth/YouTube chat, using direct polling or an optional local Node.js streaming backend. Message sending remains a local demo. Cross-device CrossChat rooms are not implemented.
+
+Firefox desktop builds and a Safari source package are now available through `node scripts/build-extension.cjs`. Firefox has real temporary-add-on/UI/local-connection acceptance coverage. Safari still requires Mac packaging and browser validation. See [Browser setup and verification](docs/browser-support.md), including the additional backend OAuth setup for Google outside Chrome.
 
 ## Load locally
 
@@ -52,6 +54,8 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 - `src/youtube-auth.js`, `youtube-messages.js`, `youtube-live.js`, `youtube-ui.js`: Chrome-managed Google OAuth, native text/moderation events, bounded polling and continuation recovery, and explicit Start/Stop controls.
 - `src/youtube-router.js`, `youtube-backend.js`: explicit transport selection, local-backend proof verification before token delivery, streaming normalization, bounded reconnects, and session-only configuration/cursor recovery. Polling remains a manual fallback.
 - `backend/server.cjs`, `hub.cjs`, `youtube-grpc.cjs`: loopback-only WebSocket server, authorization-scoped upstream subscriptions, and Google's official TLS gRPC streaming service. This is separate from the extension, with no hosting or cross-device room delivery yet.
+- `src/platform.js`, `browser-auth.js`, `backend/oauth.cjs`: Promise API namespace/session compatibility and backend-mediated OAuth outside Chrome. Client secrets stay in the backend environment; tokens use trusted session storage or background memory. Firefox keeps native Twitch Identity sign-in.
+- `scripts/build-extension.cjs`: packages Chrome, Firefox event-page, and Safari event-page variants from the same extension source, excluding all backend/dev/credential files.
 - `src/background.js`: single-writer service worker. Validates senders, accepts room changes only from the popup, and derives origin labels from the sending page URL.
 - `src/room-client.js`: message/snapshot requests and live storage-change subscriptions with stale-response protection and cleanup.
 - `src/content.js`: navigation and panel lifecycle; guarded recovery checks start before initial rendering. Rechecks removal, fullscreen, visibility, and page restoration.
@@ -64,7 +68,7 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 
 The background service provides a single place to coordinate room changes and sends. Durable state is reloaded from storage for each operation, so worker restarts preserve it. Messages use asynchronous replies as documented in [Chrome message passing](https://developer.chrome.com/docs/extensions/develop/concepts/messaging).
 
-A later hosted backend can implement shared rooms across computers. Twitch reading/emotes and YouTube polling have been reported working in Chrome. Local YouTube streaming has automated fixture coverage, including a real local gRPC/WebSocket path, but still needs live Google/browser verification. Its published protobuf schema does not expose REST's individual-message deletion event; see the local backend guide. Rich YouTube messages, CrossChat identities, streamer ownership verification, native cross-posting, and cross-device delivery remain future work.
+A later hosted backend can implement shared rooms across computers. Twitch reading/emotes, YouTube polling and local YouTube streaming have been reported working in Chrome. Firefox has extension/UI/local-handshake coverage; the new portable OAuth flow still needs real-provider consent checks, and Safari needs Mac validation. The published YouTube streaming schema does not expose REST's individual-message deletion event; see the local backend guide. Rich YouTube messages, CrossChat identities, streamer ownership verification, native cross-posting, and cross-device delivery remain future work.
 
 ## Prototype limits
 

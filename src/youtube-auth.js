@@ -6,6 +6,7 @@
     let busy = false;
     const key = 'youtubeAuth:v1';
     const configured = () => {
+      if (identity?.crossChatPortable) return true;
       const id = manifest().oauth2?.client_id || '';
       return id.endsWith('.apps.googleusercontent.com') && !/YOUR_|REPLACE_/i.test(id);
     };
@@ -14,7 +15,7 @@
       if (!configured()) throw new Error('Configure the Google Chrome Extension OAuth Client ID in manifest.json first. See docs/youtube-integration.md.');
       let result;
       try { result = await identity.getAuthToken({ interactive, scopes: [scope], enableGranularPermissions: true }); }
-      catch { throw new Error(interactive ? 'Google sign-in was cancelled or failed. Check the OAuth client, extension ID, consent setup, and Chrome profile sign-in.' : 'Google authorization is unavailable. Sign in to YouTube again.'); }
+      catch (error) { throw new Error(identity?.crossChatPortable ? error.message : interactive ? 'Google sign-in was cancelled or failed. Check the OAuth client, extension ID, consent setup, and Chrome profile sign-in.' : 'Google authorization is unavailable. Sign in to YouTube again.'); }
       if (!result?.token || result.grantedScopes && !result.grantedScopes.includes(scope)) {
         if (result?.token) await identity.removeCachedAuthToken({ token: result.token });
         throw new Error('Google did not grant YouTube read-only permission.');
@@ -36,7 +37,7 @@
       async streamToken(refresh = false) {
         let accessToken = await credentials();
         if (!accessToken) throw new Error('Sign in to YouTube first.');
-        if (refresh) {
+        if (refresh && !identity?.crossChatPortable) {
           await identity.removeCachedAuthToken({ token: accessToken });
           accessToken = await credentials();
           if (!accessToken) throw new Error('Sign in to YouTube again.');
@@ -45,6 +46,7 @@
       },
       async state() {
         return { configured: configured(), extensionId: manifest().extensionId,
+          portable: Boolean(identity?.crossChatPortable),
           connected: Boolean((await session.get(key))[key]?.active), signingIn: busy };
       },
       async signIn() {

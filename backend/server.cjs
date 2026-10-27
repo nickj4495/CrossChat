@@ -3,20 +3,33 @@ const { randomBytes, createHmac, timingSafeEqual } = require('node:crypto');
 const { WebSocketServer, WebSocket } = require('ws');
 const { createGrpcAdapter } = require('./youtube-grpc.cjs');
 const { createHub } = require('./hub.cjs');
+const { createOAuth } = require('./oauth.cjs');
+function normalizeOrigin(value) {
+  if (/^[a-p]{32}$/.test(value || '')) return `chrome-extension://${value}`;
+  if (typeof value !== 'string' || !/^(chrome-extension|moz-extension|safari-web-extension):\/\/[a-zA-Z0-9_-]+$/.test(value)) throw new Error('Provide the exact extension origin shown in CrossChat Connections.');
+  return value;
+}
 const hmac = (key, text) => createHmac('sha256', key).update(text).digest('hex');
 function equal(a, b) { return typeof a === 'string' && /^[a-f0-9]{64}$/.test(a) && timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex')); }
-function createBridge({ extensionId, key = randomBytes(32).toString('hex'), adapter, fetcher = fetch,
-  heartbeatMs = 20000, hubOptions = {} } = {}) {
-  if (!/^[a-p]{32}$/.test(extensionId || '')) throw new Error('Provide a valid Chrome extension ID.');
+function createBridge({ extensionId, extensionOrigin, key = randomBytes(32).toString('hex'), adapter, fetcher = fetch,
+  heartbeatMs = 20000, hubOptions = {}, oauthConfig = {} } = {}) {
+  const origin = normalizeOrigin(extensionOrigin || extensionId);
   if (!/^[a-f0-9]{64}$/.test(key)) throw new Error('The backend key must be 64 lowercase hexadecimal characters.');
-  const origin = `chrome-extension://${extensionId}`;
+  const oauth = createOAuth({ config: oauthConfig, fetcher });
   const hub = createHub({ adapter: adapter || createGrpcAdapter(), ...hubOptions });
   const websocket = new WebSocketServer({ noServer: true, maxPayload: 65536, perMessageDeflate: false });
-  const server = http.createServer((request, response) => {
+  const server = http.createServer(async (request, response) => {
     if (!validHost(request.headers.host) || request.headers.origin && request.headers.origin !== origin) {
       response.writeHead(403); response.end(); return;
     }
     response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('Referrer-Policy', 'no-referrer');
+    response.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
+    if (request.method === 'GET' && /^\/oauth\/(google|twitch)\/callback\?/.test(request.url)) {
+      const accepted = await oauth.callback(new URL(request.url, `http://127.0.0.1:${server.address().port}`));
+      response.writeHead(accepted ? 200 : 400, { 'Content-Type': 'text/plain; charset=utf-8' });
+      response.end(accepted ? 'CrossChat sign-in processed. You can close this tab and reopen CrossChat.' : 'Invalid or expired CrossChat sign-in. Start again from the extension.'); return;
+    }
     if (request.url === '/health' && request.method === 'GET') {
       response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ app: 'CrossChat', protocol: 1 }));
     } else { response.writeHead(404); response.end(); }
@@ -30,7 +43,7 @@ function createBridge({ extensionId, key = randomBytes(32).toString('hex'), adap
   });
   websocket.on('connection', socket => {
     let challenge = null; let clientNonce = null; let authenticated = false; let joining = false;
-    let generation = 0; let subscriptions = []; let abort = new AbortController();
+    let generation = 0; let subscriptions = []; let abort = new AbortController(); let cancelAuth = null;
     let lastAck = Date.now(); let lastJoin = 0;
     const send = data => {
       if (socket.readyState !== WebSocket.OPEN) return;
@@ -43,7 +56,7 @@ function createBridge({ extensionId, key = randomBytes(32).toString('hex'), adap
       send({ type: 'heartbeat' });
     }, heartbeatMs); heartbeat.unref();
     const authDeadline = setTimeout(() => { if (!authenticated) socket.close(1008, 'Connection authentication timed out'); }, 15000); authDeadline.unref();
-    socket.on('close', () => { clearInterval(heartbeat); clearTimeout(authDeadline); dispose(); });
+    socket.on('close', () => { clearInterval(heartbeat); clearTimeout(authDeadline); cancelAuth?.(); dispose(); });
     socket.on('error', () => {});
     socket.on('message', async (raw, binary) => {
       if (binary) { socket.close(1008, 'Text messages required'); return; }
@@ -55,8 +68,17 @@ function createBridge({ extensionId, key = randomBytes(32).toString('hex'), adap
         clientNonce = request.nonce; challenge = randomBytes(32).toString('hex');
         send({ type: 'hello', protocol: 1, challenge, proof: hmac(key, 'server:' + clientNonce) }); return;
       }
-      if (request?.type !== 'join' || !challenge || !equal(request.proof, hmac(key, `client:${challenge}:${clientNonce}`))) {
+      if (!['join', 'oauth'].includes(request?.type) || !challenge || !equal(request.proof, hmac(key, `client:${challenge}:${clientNonce}`))) {
         socket.close(1008, 'Invalid connection proof'); return;
+      }
+      if (request.type === 'oauth') {
+        if (authenticated) { socket.close(1008, 'One sign-in per connection'); return; }
+        authenticated = true; clearTimeout(authDeadline);
+        try {
+          const result = oauth.begin(request.provider, send, server.address().port, request.clientId);
+          cancelAuth = result.cancel; send({ type: 'auth-url', url: result.url });
+        } catch (error) { send({ type: 'auth-error', message: error.message }); }
+        return;
       }
       if (joining || Date.now() - lastJoin < 1000) { send({ type: 'error', message: 'Wait before restarting this connection.' }); return; }
       if (typeof request.accessToken !== 'string' || !/^[\x21-\x7e]{20,4096}$/.test(request.accessToken) ||
@@ -92,17 +114,20 @@ function createBridge({ extensionId, key = randomBytes(32).toString('hex'), adap
   });
   return { server, key,
     listen: (port = 47831) => new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', () => resolve(server.address())); }),
-    async close() { websocket.clients.forEach(socket => socket.terminate()); await new Promise(resolve => websocket.close(resolve)); hub.close(); await new Promise(resolve => server.close(resolve)); }
+    async close() { oauth.close(); websocket.clients.forEach(socket => socket.terminate()); await new Promise(resolve => websocket.close(resolve)); hub.close(); await new Promise(resolve => server.close(resolve)); }
   };
 }
 if (require.main === module) {
   (async () => {
-    let extensionId = process.env.CROSSCHAT_EXTENSION_ID;
+    let extensionId = process.env.CROSSCHAT_EXTENSION_ORIGIN || process.env.CROSSCHAT_EXTENSION_ID;
     if (!extensionId && process.stdin.isTTY) {
       const reader = require('node:readline/promises').createInterface({ input: process.stdin, output: process.stdout });
-      extensionId = (await reader.question('CrossChat extension ID (from the popup): ')).trim(); reader.close();
+      extensionId = (await reader.question('CrossChat extension origin (from Connections; Chrome ID also accepted): ')).trim(); reader.close();
     }
-    const bridge = createBridge({ extensionId, key: process.env.CROSSCHAT_BACKEND_KEY || undefined });
+    const bridge = createBridge({ extensionId, key: process.env.CROSSCHAT_BACKEND_KEY || undefined, oauthConfig: {
+      google: { clientId: process.env.CROSSCHAT_GOOGLE_CLIENT_ID, clientSecret: process.env.CROSSCHAT_GOOGLE_CLIENT_SECRET },
+      twitch: { clientId: process.env.CROSSCHAT_TWITCH_CLIENT_ID, clientSecret: process.env.CROSSCHAT_TWITCH_CLIENT_SECRET }
+    } });
     await bridge.listen();
     console.log('CrossChat backend listening at 127.0.0.1:47831 (local only).');
     console.log('Connection key — paste into CrossChat Local backend settings:');
@@ -111,4 +136,4 @@ if (require.main === module) {
     process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
   })().catch(() => { console.error('Backend could not start. Check CROSSCHAT_EXTENSION_ID and that port 47831 is free.'); process.exitCode = 1; });
 }
-module.exports = { createBridge, hmac };
+module.exports = { createBridge, hmac, normalizeOrigin };

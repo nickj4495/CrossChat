@@ -85,8 +85,10 @@ A later backend can implement shared rooms across computers. Real chat ingestion
 With Node.js installed:
 
 ```powershell
-node --test tests/prototype.test.cjs
+node --test tests/prototype.test.cjs tests/twitch-eventsub.test.cjs
 Get-ChildItem src -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```
 
 Simulated messaging/storage/UI tests do not establish Chrome extension lifecycle or live platform compatibility. Complete the browser checklist for those behaviors.
+
+Real Twitch integration preparation and the pending authentication decision are documented in [docs/twitch-integration.md](docs/twitch-integration.md). The prepared EventSub adapter is not yet connected to the extension.

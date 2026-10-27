@@ -35,7 +35,7 @@ The enable/disable toggle still controls panel visibility across tabs. Collapse 
 - `src/rooms.js`: shared-room service; validates pair URLs, resolves a page to its room, and queues all reads/writes so two tabs cannot overwrite each other's sends.
 - `src/background.js`: service worker; the single writer for histories and pairing. Validates message senders and derives platform labels from page URLs. Pair changes are accepted only from the extension popup.
 - `src/room-client.js`: content-script provider; requests snapshots/sends and uses storage-change notifications to refresh paired tabs. Subscription cleanup and response sequencing prevent stale updates.
-- `src/content.js`: page/panel lifecycle; detects navigation once per second and discards old loads after switching pages.
+- `src/content.js`: page/panel lifecycle; detects navigation once per second, discards old loads after switching pages, and installs guarded recovery checks before the initial render. Mounts outside the replaceable site body and rechecks panel removal, fullscreen, tab visibility, and page restoration.
 - `src/panel.js`: Shadow DOM UI; safe text rendering, keyboard isolation, live history rendering, compose form, save/error feedback, and collapse/expand.
 - `src/popup.html`, `popup.css`, `popup.js`: enable toggle and manual stream pairing.
 - `tests/prototype.test.cjs`: dependency-free unit/integration checks using Node's test runner and simulated Chrome messaging/storage.
@@ -68,7 +68,7 @@ The room service/client boundary can later connect to a Node.js backend and WebS
 - [ ] Toggle off/on: panels disappear/return across tabs and messages remain saved.
 - [ ] Type `f`, `k`, `m`, spaces, arrow keys, Backspace, and paste inside the input: player shortcuts do not activate. Enter sends and Tab navigates. Player shortcuts still work outside the panel.
 - [ ] Send `<img src=x onerror=alert(1)>`: it displays literally. Blank messages cannot send.
-- [ ] Collapse/expand, resize, use native chat/player controls, and enter/exit fullscreen.
+- [ ] Collapse/expand, resize, use native chat/player controls, and enter/exit fullscreen. Navigate with site links, switch tabs, and use Back/Forward: supported pages should regain their panel without a manual refresh. Reloading the extension itself still requires refreshing existing tabs.
 
 ## Automated checks
 

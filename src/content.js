@@ -7,6 +7,17 @@
   let generation = 0;
   let loading = false;
   let loadError = null;
+  let lastRenderError = null;
+  function safelyReconcile() {
+    try {
+      reconcile();
+      lastRenderError = null;
+    } catch (error) {
+      // A transient site DOM/render failure must not stop future recovery checks.
+      if (error.message !== lastRenderError) console.warn('CrossChat panel will retry rendering.', error);
+      lastRenderError = error.message;
+    }
+  }
   function reconcile() {
     const context = app.getPageContext(location.href);
     const key = context?.key ?? null;
@@ -32,13 +43,13 @@
         if (requestGeneration !== generation) { chat.destroy?.(); return; }
         provider = chat;
         loading = false;
-        reconcile();
+        safelyReconcile();
       }).catch(error => {
         if (requestGeneration !== generation) return;
         console.warn('CrossChat could not load history.', error);
         loading = false;
         loadError = 'Could not load saved chat. Refresh to retry. Existing history has not been replaced.';
-        reconcile();
+        safelyReconcile();
       });
     }
     // Mount a loading/error panel immediately; remount when history is ready.
@@ -51,7 +62,10 @@
       panel = app.createPanel(context, provider, loadError);
       panel.state = state;
     }
-    if (!panel.host.isConnected) document.body.append(panel.host);
+    // Mount outside the site's replaceable body so page transitions cannot leave
+    // a connected panel trapped inside an old/hidden application container.
+    const container = document.documentElement || document.body;
+    if (panel.host.parentElement !== container) container.append(panel.host);
     panel.host.style.setProperty('display', document.fullscreenElement ? 'none' : 'block', 'important');
   }
   async function start() {
@@ -64,21 +78,35 @@
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes.enabled) {
         enabled = changes.enabled.newValue !== false;
-        reconcile();
+        safelyReconcile();
       }
     });
-    reconcile();
+    const cleanup = () => {
+      clearInterval(timer);
+      generation++;
+      panel?.destroy();
+      provider?.destroy?.();
+      observer?.disconnect();
+      document.removeEventListener('fullscreenchange', safelyReconcile);
+      document.removeEventListener('visibilitychange', safelyReconcile);
+      window.removeEventListener('pageshow', safelyReconcile);
+    };
+    // Install recovery before the first render: even a failed initial mount is retried.
     const timer = setInterval(() => {
       if (!chrome.runtime.id) {
-        clearInterval(timer);
-        generation++;
-        panel?.destroy();
-        document.removeEventListener('fullscreenchange', reconcile);
+        cleanup();
         return;
       }
-      reconcile();
+      safelyReconcile();
     }, 1000);
-    document.addEventListener('fullscreenchange', reconcile);
+    const observer = new MutationObserver(() => {
+      if (panel && !panel.host.isConnected) safelyReconcile();
+    });
+    observer.observe(document.documentElement, { childList: true });
+    document.addEventListener('fullscreenchange', safelyReconcile);
+    document.addEventListener('visibilitychange', safelyReconcile);
+    window.addEventListener('pageshow', safelyReconcile);
+    safelyReconcile();
   }
   start();
 })();

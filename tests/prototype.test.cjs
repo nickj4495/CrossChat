@@ -115,6 +115,8 @@ test('slow history loads cannot mount a previous channel after navigation', asyn
       body: { append(host) { host.isConnected = true; mounted.add(host); } },
       addEventListener() {}, removeEventListener() {}
     },
+    MutationObserver: class { observe() {} disconnect() {} },
+    window: { addEventListener() {}, removeEventListener() {} },
     setInterval(callback) { tick = callback; return 1; }, clearInterval() {},
     CrossChat: {
       getPageContext: app.getPageContext,
@@ -408,4 +410,75 @@ test('popup restores partial drafts on reopen, activates only on save, and clear
   assert.equal(drafts.size, 0);
   popup = await openPopup();
   assert.equal(popup.get('#youtube-url').value, '');
+});
+
+test('panel recovers after first-render failure, host removal, and fullscreen/tab lifecycle events', async () => {
+  let tick;
+  let observeRemoval;
+  let attempts = 0;
+  const documentHandlers = {};
+  const windowHandlers = {};
+  const hosts = [];
+  const container = { append(host) { host.isConnected = true; host.parentElement = container; } };
+  const environment = {
+    console: { warn() {} },
+    location: { href: twitchUrl },
+    chrome: {
+      runtime: { id: 'extension-id' },
+      storage: {
+        local: { async get() { return { enabled: true }; } },
+        onChanged: { addListener() {} }
+      }
+    },
+    document: {
+      documentElement: container,
+      fullscreenElement: null,
+      addEventListener(type, listener) { documentHandlers[type] = listener; },
+      removeEventListener() {}
+    },
+    window: {
+      addEventListener(type, listener) { windowHandlers[type] = listener; },
+      removeEventListener() {}
+    },
+    MutationObserver: class {
+      constructor(callback) { observeRemoval = callback; }
+      observe() {} disconnect() {}
+    },
+    setInterval(callback) { tick = callback; return 1; }, clearInterval() {},
+    CrossChat: {
+      getPageContext: app.getPageContext,
+      async createRoomChat() { return {}; },
+      createPanel() {
+        attempts++;
+        if (attempts === 1) throw new Error('Transient rendering failure');
+        const host = {
+          isConnected: false,
+          style: { setProperty(name, value) { this[name] = value; } }
+        };
+        hosts.push(host);
+        return { host, destroy() { host.isConnected = false; host.parentElement = null; } };
+      }
+    }
+  };
+  vm.createContext(environment);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/content.js'), 'utf8'), environment);
+  for (let i = 0; i < 8; i++) await Promise.resolve();
+  assert.equal(typeof tick, 'function');
+  tick();
+  let host = hosts.at(-1);
+  assert.equal(host.parentElement, container);
+  host.isConnected = false;
+  host.parentElement = null;
+  observeRemoval();
+  assert.equal(host.isConnected, true);
+  environment.document.fullscreenElement = {};
+  documentHandlers.fullscreenchange();
+  assert.equal(host.style.display, 'none');
+  environment.document.fullscreenElement = null;
+  windowHandlers.pageshow();
+  assert.equal(host.style.display, 'block');
+  host.isConnected = false;
+  host.parentElement = null;
+  documentHandlers.visibilitychange();
+  assert.equal(host.isConnected, true);
 });

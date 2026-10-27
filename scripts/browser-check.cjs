@@ -88,6 +88,16 @@ const evaluate = async expression => {
     assert.equal(await evaluate("document.querySelectorAll('.stream-card').length"), 3);
     await evaluate("document.querySelector('#tab-connections').click()");
     assert.equal(await evaluate("document.querySelector('#pane-room').hidden"), true);
+    await evaluate("{const reader = document.querySelector('#youtube-transport'); reader.value = 'local'; reader.dispatchEvent(new Event('change')); document.querySelector('#youtube-backend-key').value = 'b'.repeat(64); document.querySelector('#youtube-backend-key').dispatchEvent(new Event('input')); popupFixture.emit(['twitchLive:revision']);}"); await pause(100);
+    assert.equal(await evaluate("document.querySelector('#youtube-backend-settings').hidden"), false);
+    assert.equal(await evaluate("document.querySelector('#youtube-transport').value"), 'local');
+    assert.equal(await evaluate("document.querySelector('#youtube-backend-key').value.length"), 64);
+    assert.equal(await evaluate("document.querySelector('#youtube-start').disabled"), true);
+    await evaluate("document.querySelector('#youtube-reader-save').click()"); await pause(100);
+    assert.equal(await evaluate("document.querySelector('#youtube-backend-key').value"), '');
+    assert.equal(await evaluate('popupFixture.youtube.transport.keyConfigured'), true);
+    assert.match(await evaluate("document.querySelector('#youtube-reader-hint').textContent"), /fallback to polling is manual/);
+    fs.writeFileSync(path.join(artifacts, 'connections.png'), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
     await evaluate("document.querySelector('#tab-room').click()");
     await evaluate("{const input = document.querySelector('.group-label input'); input.value = 'League of Legends, Proplay, Worlds'; input.dispatchEvent(new Event('input')); const color = document.querySelector('.color-label input'); color.value = '#ff9900'; color.dispatchEvent(new Event('input')); document.querySelector('.stream-actions button').click();}"); await pause(100);
     assert.ok(await evaluate("popupFixture.data.sources[0].groups.includes('Worlds')"));
@@ -97,8 +107,8 @@ const evaluate = async expression => {
     assert.equal(await evaluate("document.activeElement === document.querySelector('.group-label input')"), true);
     assert.equal(await evaluate("document.querySelector('.group-label input').value"), 'Unsaved group');
     fs.writeFileSync(path.join(artifacts, 'popup.png'), Buffer.from((await send('Page.captureScreenshot', { format: 'png' })).data, 'base64'));
-    console.log('Chrome UI checks passed: scroll anchoring/newest, group filters, sizing, links, colors, popup tabs and preserved edit focus.');
-    console.log('Screenshots: .artifacts/widget.png and .artifacts/popup.png');
+    console.log('Chrome UI checks passed: scroll anchoring/newest, group filters, sizing, links, colors, popup tabs, reader settings and preserved edit focus.');
+    console.log('Screenshots: .artifacts/widget.png, .artifacts/popup.png, .artifacts/connections.png');
   } finally {
     if (socket?.readyState === 1) { try { await send('Browser.close', {}, null); } catch {} socket.close(); }
     processHandle?.kill(); server.close();

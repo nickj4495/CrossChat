@@ -1,4 +1,5 @@
 ﻿importScripts('mock-chat.js', 'view-model.js', 'history.js', 'rooms.js', 'twitch-emotes.js', 'twitch-eventsub.js', 'twitch-auth.js', 'twitch-buffer.js', 'twitch-live.js', 'youtube-auth.js', 'youtube-messages.js', 'youtube-live.js', 'stream-directory.js');
+importScripts('youtube-backend.js', 'youtube-router.js');
 const service = CrossChat.createRoomService(chrome.storage.local);
 const viewSettings = CrossChat.createViewSettings(chrome.storage.local);
 let streamDirectory = null;
@@ -27,8 +28,9 @@ const initializeYouTube = () => {
   if (!youtubeAuth) {
     youtubeAuth = CrossChat.createYouTubeAuth({ identity: chrome.identity, session: chrome.storage.session,
       manifest: () => ({ ...(chrome.runtime.getManifest?.() || {}), extensionId: chrome.runtime.id }) });
-    youtubeLive = CrossChat.createYouTubeLive({ auth: youtubeAuth, service, local: chrome.storage.local,
-      session: chrome.storage.session, publish });
+    const dependencies = { auth: youtubeAuth, service, local: chrome.storage.local, session: chrome.storage.session, publish };
+    youtubeLive = CrossChat.createYouTubeRouter({ polling: CrossChat.createYouTubeLive(dependencies),
+      createBackend: () => CrossChat.createYouTubeBackend(dependencies), session: chrome.storage.session, publish });
   }
 };
 const getDirectory = () => {
@@ -85,7 +87,10 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
       }
       if (request.action === 'getYouTubeState') {
         initializeYouTube(); await youtubeLive.sync();
-        return { auth: await youtubeAuth.state(), live: youtubeLive.getStatus() };
+        return { auth: await youtubeAuth.state(), live: youtubeLive.getStatus(), transport: await youtubeLive.settings() };
+      }
+      if (request.action === 'youtubeConfigure') {
+        initializeYouTube(); return youtubeLive.configure({ mode: request.mode, key: request.key });
       }
       if (request.action === 'youtubeSignIn') {
         initializeYouTube(); return youtubeAuth.signIn();

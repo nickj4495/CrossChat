@@ -1,6 +1,6 @@
-﻿# CrossChat — milestone 8: room workspace and chat controls
+# CrossChat — milestone 9: local YouTube streaming
 
-CrossChat aims to combine live chats for streamers and viewers. This dependency-free Manifest V3 extension supports a shared local room across **2–10 Twitch channels and/or YouTube videos in one Chrome profile**. It implements Twitch OAuth/EventSub with native emote images and Google OAuth/YouTube chat polling. Message sending remains a local demo. Cross-device CrossChat rooms are not implemented.
+CrossChat aims to combine live chats for streamers and viewers. This vanilla-JavaScript Manifest V3 extension supports a shared local room across **2–10 Twitch channels and/or YouTube videos in one Chrome profile**. It implements Twitch OAuth/EventSub with native emote images and Google OAuth/YouTube chat, using direct polling or an optional local Node.js streaming backend. Message sending remains a local demo. Cross-device CrossChat rooms are not implemented.
 
 ## Load locally
 
@@ -9,7 +9,7 @@ CrossChat aims to combine live chats for streamers and viewers. This dependency-
 3. After extension edits, click **Reload** on its card and refresh existing test tabs.
 4. Pin CrossChat through Chrome's Extensions menu (puzzle icon) to access the popup.
 
-No build step, npm install, or server is required. Local demos need no credentials. For real Twitch reading, register a Twitch app and enter its public Client ID in the popup; no client secret is used. Follow [Twitch setup and testing](docs/twitch-integration.md). For YouTube, configure a Google Chrome Extension OAuth client in the manifest, then sign in and explicitly start reading; see [YouTube setup and testing](docs/youtube-integration.md).
+The extension needs no build step or npm install. Local demos need no credentials. For real Twitch reading, register a Twitch app and enter its public Client ID in the popup; no client secret is used. Follow [Twitch setup and testing](docs/twitch-integration.md). For YouTube, configure a Google Chrome Extension OAuth client in the manifest, then sign in and explicitly start reading; see [YouTube setup and testing](docs/youtube-integration.md). To reduce the polling delay, run the optional backend following [Local streaming setup](docs/local-backend.md); only that backend needs Node.js dependencies.
 
 ## Create a multi-source room
 
@@ -41,7 +41,7 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 
 ## Architecture
 
-- `manifest.json`: MV3 (Chrome 116+), scoped content scripts, popup, service worker, storage/identity/alarms permissions, and host access for Twitch identity/API endpoints plus Google's YouTube API host.
+- `manifest.json`: MV3 (Chrome 116+), scoped content scripts, popup, service worker, storage/identity/alarms permissions, and host access for Twitch, Google's YouTube API, and local loopback. Backend code fixes the local endpoint to port 47831.
 - `src/mock-chat.js`: route detection, normalized mock messages, and optional source metadata (`sourceKey`, `sourceLabel`).
 - `src/history.js`: validated versioned history storage, retention, and save confirmation before memory is updated.
 - `src/rooms.js`: validates/canonicalizes source lists, identifies rooms, resolves page membership, decorates legacy messages, and serializes reads/writes to avoid conflicting sends from different tabs.
@@ -50,6 +50,8 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 - `src/twitch-emotes.js`: shared fragment validation and safe text/image rendering, with reduced-motion support and readable image-error fallback.
 - `src/twitch-ui.js`: popup Twitch setup/sign-in/sign-out/reconnect controls.
 - `src/youtube-auth.js`, `youtube-messages.js`, `youtube-live.js`, `youtube-ui.js`: Chrome-managed Google OAuth, native text/moderation events, bounded polling and continuation recovery, and explicit Start/Stop controls.
+- `src/youtube-router.js`, `youtube-backend.js`: explicit transport selection, local-backend proof verification before token delivery, streaming normalization, bounded reconnects, and session-only configuration/cursor recovery. Polling remains a manual fallback.
+- `backend/server.cjs`, `hub.cjs`, `youtube-grpc.cjs`: loopback-only WebSocket server, authorization-scoped upstream subscriptions, and Google's official TLS gRPC streaming service. This is separate from the extension, with no hosting or cross-device room delivery yet.
 - `src/background.js`: single-writer service worker. Validates senders, accepts room changes only from the popup, and derives origin labels from the sending page URL.
 - `src/room-client.js`: message/snapshot requests and live storage-change subscriptions with stale-response protection and cleanup.
 - `src/content.js`: navigation and panel lifecycle; guarded recovery checks start before initial rendering. Rechecks removal, fullscreen, visibility, and page restoration.
@@ -62,7 +64,7 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 
 The background service provides a single place to coordinate room changes and sends. Durable state is reloaded from storage for each operation, so worker restarts preserve it. Messages use asynchronous replies as documented in [Chrome message passing](https://developer.chrome.com/docs/extensions/develop/concepts/messaging).
 
-A later backend can implement shared rooms across computers. Twitch read-only OAuth/EventSub ingestion is implemented, with simulated-service coverage. Live Twitch reading has been reported working in Chrome. Emote rendering has automated coverage and CDN endpoint checks but still needs browser verification with real messages. YouTube read-only polling is implemented with simulated-service coverage and awaits real Google project/browser verification. Rich YouTube messages, CrossChat identities, streamer ownership verification, native cross-posting, and cross-device delivery remain future work.
+A later hosted backend can implement shared rooms across computers. Twitch reading/emotes and YouTube polling have been reported working in Chrome. Local YouTube streaming has automated fixture coverage, including a real local gRPC/WebSocket path, but still needs live Google/browser verification. Its published protobuf schema does not expose REST's individual-message deletion event; see the local backend guide. Rich YouTube messages, CrossChat identities, streamer ownership verification, native cross-posting, and cross-device delivery remain future work.
 
 ## Prototype limits
 
@@ -90,9 +92,10 @@ A later backend can implement shared rooms across computers. Twitch read-only OA
 
 ## Automated checks
 
-With Node.js installed:
+With Node.js 22+ installed, install the optional backend dependencies before running the full suite:
 
 ```powershell
+npm --prefix backend ci
 node --test
 Get-ChildItem src -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```

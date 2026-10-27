@@ -36,7 +36,7 @@ test('manifest references existing local files and declares Twitch integration p
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.oauth2.scopes, ['https://www.googleapis.com/auth/youtube.readonly']);
   assert.deepEqual(manifest.permissions, ['storage', 'identity', 'alarms']);
-  assert.deepEqual(manifest.host_permissions, ['https://id.twitch.tv/*', 'https://api.twitch.tv/*', 'https://www.googleapis.com/*']);
+  assert.deepEqual(manifest.host_permissions, ['https://id.twitch.tv/*', 'https://api.twitch.tv/*', 'https://www.googleapis.com/*', 'http://127.0.0.1/*']);
   for (const file of [...manifest.content_scripts[0].js, manifest.action.default_popup, manifest.background.service_worker]) assert.ok(fs.existsSync(path.join(base, file)));
 });
 

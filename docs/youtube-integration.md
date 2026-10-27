@@ -2,7 +2,7 @@
 
 This milestone implements an official YouTube Data API reader alongside Twitch. It uses Google OAuth through Chrome's Identity API, not page scraping or your Twitch credentials. Google sign-in and live reading are separate actions. Message sending remains a local demo; CrossChat does not post into either native chat.
 
-Automated tests simulate Google OAuth/API responses and polling timers. Google's official API discovery document was checked for the endpoint and read-only scope. **Real Google sign-in and live chat delivery have not yet been verified with a configured project in Chrome.** Follow this guide to perform that verification.
+Google sign-in and native YouTube polling messages have been reported working in Chrome. The new optional local streaming transport has local gRPC/WebSocket fixture coverage and still needs live Google/browser verification. Follow [Local streaming setup](local-backend.md) to try it; the instructions below cover Google setup and the direct-polling fallback.
 
 ## Create the Google OAuth client
 
@@ -50,16 +50,16 @@ Google documents a cost of **5 quota units per chat-list request**. Lookup calls
 
 Clicking Start reading explicitly starts a new run and resets that run's counter. More sources spend the request budget faster. Shared project quota is also used by other instances/apps using that project. Quota/rate errors stop the affected source and show an error; check Google Cloud before retrying. This implementation does not request or purchase more quota.
 
-Google recommends [streamList](https://developers.google.com/youtube/data/live/reference/rest/v3/liveChatMessages/streamList) for efficient server streaming. Its [published streaming demo](https://developers.google.com/youtube/data/live/streaming-live-chat) uses gRPC. That is a future backend/transport milestone; this vanilla-JavaScript prototype uses the documented [list endpoint](https://developers.google.com/youtube/data/live/reference/rest/v3/liveChatMessages/list) and its timing contract instead of inventing a browser streaming endpoint.
+Google recommends [streamList](https://developers.google.com/youtube/data/live/reference/rest/v3/liveChatMessages/streamList) for efficient server streaming. Its [published streaming demo](https://developers.google.com/youtube/data/live/streaming-live-chat) uses gRPC. CrossChat now offers an optional [local streaming backend](local-backend.md) using that service. Choose the reader in Connections and save settings before Start. Streaming removes CrossChat's 15-second polling wait and the polling test cap, while Google quota still applies. Polling uses the documented [list endpoint](https://developers.google.com/youtube/data/live/reference/rest/v3/liveChatMessages/list) as an explicit manual fallback.
 
 ## Data, moderation, and lifecycle
 
-- Chrome manages Google access tokens. The extension stores only a connected flag in `chrome.storage.session`; token values are used inside the worker for Authorization headers and are not returned to content scripts, placed in request URLs, written to project files, or saved in message histories.
+- Chrome manages Google access tokens. The extension stores a connected flag, not token values, in `chrome.storage.session`. In direct mode tokens are used inside the worker for Authorization headers; local streaming passes a token only to the authenticated loopback backend, which keeps it in RAM for Google requests. Tokens are never returned to content scripts, placed in request URLs, written to project files, or saved in message histories. Transport/key/cursor session settings are covered in the local backend guide.
 - Noninteractive token access is used only after explicit sign-in. The cache handles expiry; unauthorized responses clear the connection and require sign-in. Google authorization is independent of Twitch authorization.
 - Disconnect clears local cached Google tokens for this extension; it does not sign you out of Chrome or revoke the app's Google account grant. Remove that grant in Google Account's third-party access settings if desired.
 - Reloading/disabling the extension or restarting Chrome clears the extension session flags/run state. Connect/start again; Chrome may reuse a previously approved grant rather than showing consent again. Saved rooms, local demo history, and the manifest's public Client ID remain.
 - YouTube uses a separate in-memory buffer of up to 200 messages. The panel merges native Twitch, native YouTube, and local demo messages and shows at most the newest 200 combined. Native messages are not saved as durable demo history.
-- Deletion events, tombstones, and user-ban events remove relevant retained native messages. Delayed older messages cannot restore deleted/banned text. Moderation is seen on polling responses, so removals can be delayed. Source/API errors clear that source's retained text because moderation may have been missed during a gap.
+- In polling mode, deletion events, tombstones, and user-ban events remove relevant retained native messages. Delayed older messages cannot restore deleted/banned text. Moderation is seen on polling responses, so removals can be delayed. Source/API errors clear that source's retained text because moderation may have been missed during a gap. The current published streaming schema supports tombstones/bans but does not declare REST's individual-message deletion event; streaming does not promise full immediate single-delete parity.
 - Stop, disconnect, disable, and source-list changes cancel pending requests and clear the native YouTube buffer. Changing sources requires another explicit Start. Ordinary worker recovery resumes an active run from session continuation data but begins with an empty native buffer.
 - Standard text messages and Unicode emoji are supported. YouTube custom emote images, Super Chats, stickers, memberships, polls, and other rich event rendering remain future work. Twitch's native emote rendering stays intact.
 
@@ -83,6 +83,7 @@ The source schema and moderation events are documented in [YouTube liveChatMessa
 ## Automated checks
 
 ```powershell
+npm --prefix backend ci
 node --test
 Get-ChildItem src -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```

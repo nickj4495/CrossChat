@@ -32,7 +32,14 @@
 <label for="google-extension-id">Extension ID (click to select)</label><input id="google-extension-id" type="text" readonly>
 <p class="hint">Put the public Google Client ID in manifest.json → oauth2.client_id, then reload CrossChat. No client secret or API key. Setup instructions: docs/youtube-integration.md.</p></details>
 <div class="actions"><button id="youtube-connect" type="button" disabled>Sign in to Google</button><button id="youtube-disconnect" type="button" disabled>Disconnect</button></div>
-<p class="hint">Reading checks about every 15 seconds or slower and uses Google project quota. Stops after 30 minutes or 300 chat requests.</p>
+<label for="youtube-transport">YouTube reader</label><select id="youtube-transport"><option value="polling">Direct polling (fallback)</option><option value="local">Local streaming (requires backend)</option></select>
+<div id="youtube-backend-settings" hidden>
+<p class="hint">Run the local backend using docs/local-backend.md. It connects only to this computer at 127.0.0.1:47831. Copy the connection key printed in its terminal below. This is not your Google Client ID or a client secret.</p>
+<label for="youtube-backend-key">Local backend connection key</label><input id="youtube-backend-key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste key from backend terminal">
+<p id="youtube-backend-key-state" class="hint"></p>
+</div>
+<button id="youtube-reader-save" class="secondary" type="button">Save reader settings</button>
+<p id="youtube-reader-hint" class="hint">Direct polling checks about every 15 seconds or slower. Stops after 30 minutes or 300 chat requests. Both readers use Google project quota.</p>
 <div class="actions"><button id="youtube-start" type="button" disabled>Start reading</button><button id="youtube-stop" type="button" disabled>Stop</button></div>
 <p id="youtube-state" role="status">Checking YouTube…</p><p id="youtube-feedback" role="status"></p>
 </section>

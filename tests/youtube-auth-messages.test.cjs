@@ -65,6 +65,15 @@ test('Google 401 clears connection; quota and disabled-chat errors are safe and 
   h.setStatus(403, 'liveChatDisabled');
   await assert.rejects(h.auth.api('liveChat/messages', {}), /disabled/);
 });
+test('background streaming token access requires explicit sign-in and renews without storing the token', async () => {
+  const h = authHarness();
+  await assert.rejects(h.auth.streamToken(), /Sign in/); assert.equal(h.identityCalls.length, 0);
+  await h.auth.signIn(); assert.equal(await h.auth.streamToken(true), 'TEST_GOOGLE_TOKEN');
+  assert.ok(h.identityCalls.includes('remove'));
+  assert.equal(h.identityCalls.filter(call => typeof call === 'object' && call.interactive === false).length, 2);
+  assert.equal(JSON.stringify(h.session.data).includes('TEST_GOOGLE_TOKEN'), false);
+  await h.auth.signOut(); await assert.rejects(h.auth.streamToken(), /Sign in/);
+});
 function messageHarness() {
   const environment = { CrossChat: {} }; vm.createContext(environment);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/youtube-messages.js'), 'utf8'), environment);

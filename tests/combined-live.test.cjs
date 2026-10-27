@@ -41,6 +41,7 @@ test('worker merges Twitch, YouTube, and local messages while restricting Google
   await invoke({ action: 'setSources', urls: [page.url, 'https://www.youtube.com/watch?v=video'] }, popup);
   assert.equal((await invoke({ action: 'youtubeStart' })).ok, false);
   assert.equal((await invoke({ action: 'getYouTubeState' })).ok, false);
+  assert.equal((await invoke({ action: 'youtubeConfigure', mode: 'local', key: 'b'.repeat(64) })).ok, false);
   assert.equal(reading, false);
   await invoke({ action: 'youtubeStart' }, popup);
   let response = await invoke({ action: 'snapshot' });

@@ -32,6 +32,17 @@
       } catch (error) { if (expected === generation) await clear(); throw error; }
     };
     return {
+      // Background-only transport dependency. Never expose this through RPC.
+      async streamToken(refresh = false) {
+        let accessToken = await credentials();
+        if (!accessToken) throw new Error('Sign in to YouTube first.');
+        if (refresh) {
+          await identity.removeCachedAuthToken({ token: accessToken });
+          accessToken = await credentials();
+          if (!accessToken) throw new Error('Sign in to YouTube again.');
+        }
+        return accessToken;
+      },
       async state() {
         return { configured: configured(), extensionId: manifest().extensionId,
           connected: Boolean((await session.get(key))[key]?.active), signingIn: busy };

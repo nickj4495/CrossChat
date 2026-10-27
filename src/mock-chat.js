@@ -14,9 +14,9 @@
     return null;
   };
   // Provider boundary: future network adapters can implement these methods.
-  app.createMockChat = () => {
+  app.createMockChat = (initialMessages) => {
     const now = Date.now();
-    const messages = [
+    const messages = initialMessages ? initialMessages.map(message => ({ ...message })).slice(-200) : [
       ['twitch', 'PixelPilot', 'That last round was so close!'],
       ['youtube', 'MayaPlays', 'Watching from YouTube — hey everyone 👋'],
       ['twitch', 'CozyByte', 'The stream looks great tonight.'],

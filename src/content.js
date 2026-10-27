@@ -4,24 +4,53 @@
   let panel = null;
   let currentKey = null;
   let provider = null;
+  let generation = 0;
+  let loading = false;
+  let loadError = null;
   function reconcile() {
     const context = app.getPageContext(location.href);
-    if (context?.key !== currentKey) {
+    const key = context?.key ?? null;
+    if (key !== currentKey) {
+      generation++;
       panel?.destroy();
       panel = null;
-      currentKey = context?.key ?? null;
-      provider = context ? app.createMockChat() : null;
+      currentKey = key;
+      provider = null;
+      loading = false;
+      loadError = null;
     }
     if (!enabled || !context) {
       panel?.destroy();
       panel = null;
       return;
     }
-    // Leave site layouts and native chat untouched; only append our own element.
-    if (!panel) panel = app.createPanel(context, provider);
+    if (!provider && !loading && !loadError) {
+      loading = true;
+      const requestGeneration = generation;
+      app.createPersistentChat(context).then(chat => {
+        if (requestGeneration !== generation) return;
+        provider = chat;
+        loading = false;
+        reconcile();
+      }).catch(error => {
+        if (requestGeneration !== generation) return;
+        console.warn('CrossChat could not load history.', error);
+        loading = false;
+        loadError = 'Could not load saved chat. Refresh to retry. Existing history has not been replaced.';
+        reconcile();
+      });
+    }
+    // Mount a loading/error panel immediately; remount when history is ready.
+    const state = provider ? 'ready' : loadError ? 'error' : 'loading';
+    if (panel && panel.state !== state) {
+      panel.destroy();
+      panel = null;
+    }
+    if (!panel) {
+      panel = app.createPanel(context, provider, loadError);
+      panel.state = state;
+    }
     if (!panel.host.isConnected) document.body.append(panel.host);
-    panel.host.hidden = Boolean(document.fullscreenElement);
-    // The host's important display rule means fullscreen hiding must be explicit.
     panel.host.style.setProperty('display', document.fullscreenElement ? 'none' : 'block', 'important');
   }
   async function start() {
@@ -38,12 +67,12 @@
       }
     });
     reconcile();
-    // Both platforms use client-side navigation. A small URL check avoids patching
-    // their history methods or observing every chat/video DOM change.
     const timer = setInterval(() => {
       if (!chrome.runtime.id) {
         clearInterval(timer);
+        generation++;
         panel?.destroy();
+        document.removeEventListener('fullscreenchange', reconcile);
         return;
       }
       reconcile();

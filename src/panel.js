@@ -1,6 +1,6 @@
 ﻿(() => {
   const app = globalThis.CrossChat;
-  app.createPanel = (context, provider) => {
+  app.createPanel = (context, provider, loadError = null) => {
     const host = document.createElement('crosschat-panel');
     host.style.cssText = 'all:initial!important;position:fixed!important;right:16px!important;bottom:16px!important;z-index:2147483647!important;display:block!important;max-width:calc(100vw - 32px)!important;';
     const root = host.attachShadow({ mode: 'closed' });
@@ -24,8 +24,8 @@
       </style>
       <section class="panel" aria-label="CrossChat mock chat">
         <header><span class="logo" aria-hidden="true">C↔</span><div class="title"><h2>CrossChat</h2><small>TWITCH + YOUTUBE · PROTOTYPE</small></div><button class="collapse" aria-label="Collapse CrossChat" aria-expanded="true">−</button></header>
-        <div class="body"><p class="notice">Mock chat · Messages stay in this page only.</p><div class="messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
-        <form><label for="message">Your message <span class="destination"></span></label><div class="compose"><input id="message" maxlength="500" autocomplete="off" placeholder="Say hello to both chats…"><button type="submit" disabled>Send</button></div><span class="foot">Local demo only. Nothing is sent to either platform.</span></form></div>
+        <div class="body"><p class="notice">Mock chat · History saved on this device.</p><div class="messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions" tabindex="0"></div>
+        <form><label for="message">Your message <span class="destination"></span></label><div class="compose"><input id="message" maxlength="500" autocomplete="off" placeholder="Say hello to both chats…"><button type="submit" disabled>Send</button></div><span class="foot" role="status">Local demo only. Nothing is sent to either platform.</span></form></div>
       </section>`;
     const log = root.querySelector('.messages');
     const input = root.querySelector('input');
@@ -59,16 +59,37 @@
       while (log.children.length > 200) log.firstElementChild.remove();
       log.scrollTop = log.scrollHeight;
     }
-    provider.getMessages().forEach(append);
-    input.addEventListener('input', () => { send.disabled = !input.value.trim(); });
-    root.querySelector('form').addEventListener('submit', event => {
+    const status = root.querySelector('.foot');
+    let sending = false;
+    input.disabled = !provider;
+    if (provider) provider.getMessages().forEach(append);
+    else status.textContent = loadError || 'Loading saved chat…';
+    input.addEventListener('input', () => { send.disabled = sending || !input.value.trim(); });
+    root.querySelector('form').addEventListener('submit', async event => {
       event.preventDefault();
-      const message = provider.send(input.value, context.platform);
-      if (!message) return;
-      append(message);
-      input.value = '';
+      if (!provider || sending || !input.value.trim()) return;
+      sending = true;
+      input.disabled = true;
       send.disabled = true;
-      input.focus();
+      status.textContent = 'Saving on this device…';
+      try {
+        const message = await provider.send(input.value, context.platform);
+        if (message) {
+          append(message);
+          input.value = '';
+          status.textContent = 'Saved on this device. Nothing sent to either platform.';
+        } else {
+          status.textContent = 'Enter a message of 1–500 characters.';
+        }
+      } catch (error) {
+        console.warn('CrossChat could not save message.', error);
+        status.textContent = 'Message not saved. Your text is kept here; please try again.';
+      } finally {
+        sending = false;
+        input.disabled = false;
+        send.disabled = !input.value.trim();
+        if (host.isConnected) input.focus();
+      }
     });
     const collapse = root.querySelector('.collapse');
     collapse.addEventListener('click', () => {
@@ -87,4 +108,3 @@
     };
   };
 })();
-

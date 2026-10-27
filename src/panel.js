@@ -13,7 +13,7 @@
       if (event.composedPath().includes(host)) event.stopImmediatePropagation();
     };
     keyboardEvents.forEach(type => window.addEventListener(type, isolateKeyboard, true));
-    // Only static markup goes through innerHTML. Message text always uses textContent.
+    // Only static markup goes through innerHTML. Message text uses safe DOM nodes; only validated Twitch fragments can create emote images.
     root.innerHTML = `
       <style>
         :host{color-scheme:dark}*{box-sizing:border-box}button,input{font:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible{outline:2px solid #b6a0ff;outline-offset:3px}
@@ -23,6 +23,7 @@
         form{padding:12px 14px 14px;border-top:1px solid #2c2936}label{display:block;font-size:12px;color:#aaa6ba;margin-bottom:6px}.compose{display:flex;gap:8px}input{min-width:0;flex:1;background:#20202b;color:#fff;border:1px solid #464052;border-radius:8px;padding:10px}button[type=submit]{border:0;border-radius:8px;background:#b399ff;color:#211435;font-weight:700;padding:0 13px}button:disabled{opacity:.45;cursor:default}.foot{display:block;margin-top:8px;color:#9791a9;font-size:11px}[hidden]{display:none!important}
         .source{display:block;color:#b9acd3;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.filters{margin:10px 14px;color:#bbb3cd;font-size:12px}.filters summary{cursor:pointer}.source-options{max-height:120px;overflow:auto;padding-top:6px}.source-option{display:flex;align-items:center;gap:7px;font-size:11px;overflow-wrap:anywhere;margin:6px 0}.source-option input{flex:none;min-width:16px;width:16px;height:16px;margin:0;accent-color:#b399ff}.empty{margin:10px 14px;color:#aaa6ba;font-size:12px}
         .connection{margin:8px 14px;font-size:11px;color:#c0b4d9;white-space:pre-line;overflow-wrap:anywhere}
+        .text{white-space:pre-wrap}.emote{display:inline-block;height:28px;width:auto;max-width:112px;object-fit:contain;vertical-align:middle}
       </style>
       <section class="panel" aria-label="CrossChat combined chat">
         <header><span class="logo" aria-hidden="true">C↔</span><div class="title"><h2>CrossChat</h2><small>MULTI-SOURCE CHAT</small></div><button class="collapse" aria-label="Collapse CrossChat" aria-expanded="true">−</button></header>
@@ -49,7 +50,7 @@
       meta.append(badge, author, time);
       const body = document.createElement('p');
       body.className = 'text';
-      body.textContent = message.text;
+      app.renderMessageBody(body, message);
       const origin = document.createElement('span');
       origin.className = 'source';
       origin.textContent = message.sourceLabel || `Demo ${message.platform} sample`;

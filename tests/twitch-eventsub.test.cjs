@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const sandbox = {};
 vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/twitch-emotes.js'), 'utf8'), sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/twitch-eventsub.js'), 'utf8'), sandbox);
 const normalize = sandbox.CrossChat.normalizeTwitchNotification;
 const fixture = () => ({

@@ -6,7 +6,7 @@ const vm = require('node:vm');
 function harness() {
   const environment = { URL, URLSearchParams };
   vm.createContext(environment);
-  for (const file of ['twitch-eventsub.js', 'twitch-buffer.js', 'twitch-live.js']) {
+  for (const file of ['twitch-emotes.js', 'twitch-eventsub.js', 'twitch-buffer.js', 'twitch-live.js']) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', file), 'utf8'), environment);
   }
   const sockets = [];

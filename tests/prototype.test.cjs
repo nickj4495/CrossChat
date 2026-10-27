@@ -320,6 +320,7 @@ test('panel renders shared updates, sends once, and releases its subscription', 
     CrossChat: {}
   };
   vm.createContext(environment);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/twitch-emotes.js'), 'utf8'), environment);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/panel.js'), 'utf8'), environment);
   let notify;
   let unsubscribed = false;

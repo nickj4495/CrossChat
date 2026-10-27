@@ -1,4 +1,4 @@
-﻿importScripts('mock-chat.js', 'history.js', 'rooms.js', 'twitch-eventsub.js', 'twitch-auth.js', 'twitch-buffer.js', 'twitch-live.js');
+﻿importScripts('mock-chat.js', 'history.js', 'rooms.js', 'twitch-emotes.js', 'twitch-eventsub.js', 'twitch-auth.js', 'twitch-buffer.js', 'twitch-live.js');
 const service = CrossChat.createRoomService(chrome.storage.local);
 let twitchAuth = null;
 let twitchLive = null;

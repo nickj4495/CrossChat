@@ -14,7 +14,7 @@
 <h2>Read Twitch chat</h2>
 <details><summary>First-time Twitch setup</summary><p class="hint">Register an app at <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener noreferrer">Twitch Developer Console</a>. Add this exact OAuth Redirect URL:</p>
 <label for="twitch-callback">Callback URL (click to select)</label><input id="twitch-callback" type="text" readonly aria-label="Twitch OAuth redirect URL">
-<p class="hint">Choose a suitable chat-tool category. Copy the app's public Client ID below. No client secret is needed. Full instructions are in docs/twitch-integration.md in the project.</p></details>
+<p class="hint">Choose a suitable chat-tool category and the Confidential client type for this sign-in flow. Copy the app's public Client ID below. No client secret is needed. Full instructions are in docs/twitch-integration.md in the project.</p></details>
 <label for="twitch-client-id">Public Twitch Client ID</label><input id="twitch-client-id" type="text" disabled autocomplete="off" spellcheck="false" placeholder="Public Client ID, not a client secret">
 <div class="actions"><button id="twitch-sign-in" type="button" disabled>Sign in to Twitch</button><button id="twitch-sign-out" type="button" disabled>Sign out</button></div>
 <button id="twitch-reconnect" type="button" disabled>Reconnect</button>

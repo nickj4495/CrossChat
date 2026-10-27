@@ -24,7 +24,8 @@
       id: `twitch:${channel}:${event.message_id}`,
       platform: 'twitch', origin: 'twitch-eventsub',
       sourceKey: `twitch:${channel}`, sourceLabel: channel,
-      author, authorId: event.chatter_user_id, text, time, local: false
+      author, authorId: event.chatter_user_id, text, time, local: false,
+      fragments: app.getTwitchFragments(text, event.message.fragments)
     };
   };
 })();

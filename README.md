@@ -1,6 +1,6 @@
-﻿# CrossChat — milestone 5: read-only Twitch chat
+﻿# CrossChat — milestone 6: Twitch emote images
 
-CrossChat aims to combine live chats for streamers and viewers. This dependency-free Manifest V3 extension supports a shared local room across **2–10 Twitch channels and/or YouTube videos in one Chrome profile**. It now implements Twitch OAuth and read-only EventSub chat for the room's Twitch sources. YouTube and message sending remain local demos. Cross-device CrossChat rooms are not implemented.
+CrossChat aims to combine live chats for streamers and viewers. This dependency-free Manifest V3 extension supports a shared local room across **2–10 Twitch channels and/or YouTube videos in one Chrome profile**. It implements Twitch OAuth and read-only EventSub chat for the room's Twitch sources, now with inline native Twitch emote images. YouTube and message sending remain local demos. Cross-device CrossChat rooms are not implemented.
 
 ## Load locally
 
@@ -47,6 +47,7 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 - `src/rooms.js`: validates/canonicalizes source lists, identifies rooms, resolves page membership, decorates legacy messages, and serializes reads/writes to avoid conflicting sends from different tabs.
 - `src/twitch-auth.js`: browser OAuth, verified callbacks, session-only tokens, validation, revocation, and constrained API requests.
 - `src/twitch-eventsub.js`, `twitch-buffer.js`, `twitch-live.js`: event normalization, bounded native-message buffer, moderation, subscription checks, reconnects, and multi-source connection status.
+- `src/twitch-emotes.js`: shared fragment validation and safe text/image rendering, with reduced-motion support and readable image-error fallback.
 - `src/twitch-ui.js`: popup setup/sign-in/sign-out/reconnect controls.
 - `src/background.js`: single-writer service worker. Validates senders, accepts room changes only from the popup, and derives origin labels from the sending page URL.
 - `src/room-client.js`: message/snapshot requests and live storage-change subscriptions with stale-response protection and cleanup.
@@ -57,7 +58,7 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 
 The background service provides a single place to coordinate room changes and sends. Durable state is reloaded from storage for each operation, so worker restarts preserve it. Messages use asynchronous replies as documented in [Chrome message passing](https://developer.chrome.com/docs/extensions/develop/concepts/messaging).
 
-A later backend can implement shared rooms across computers. Twitch read-only OAuth/EventSub ingestion is implemented, with simulated-service coverage. Real OAuth and subscriptions must still be verified with a registered app. YouTube ingestion, CrossChat identities, streamer ownership verification, native cross-posting, and cross-device delivery remain future work.
+A later backend can implement shared rooms across computers. Twitch read-only OAuth/EventSub ingestion is implemented, with simulated-service coverage. Live Twitch reading has been reported working in Chrome. Emote rendering has automated coverage and CDN endpoint checks but still needs browser verification with real messages. YouTube ingestion, CrossChat identities, streamer ownership verification, native cross-posting, and cross-device delivery remain future work.
 
 ## Prototype limits
 
@@ -88,7 +89,7 @@ A later backend can implement shared rooms across computers. Twitch read-only OA
 With Node.js installed:
 
 ```powershell
-node --test tests/prototype.test.cjs tests/twitch-eventsub.test.cjs tests/twitch-auth.test.cjs tests/twitch-live.test.cjs tests/twitch-ui.test.cjs
+node --test tests/prototype.test.cjs tests/twitch-eventsub.test.cjs tests/twitch-auth.test.cjs tests/twitch-live.test.cjs tests/twitch-ui.test.cjs tests/twitch-emotes.test.cjs
 Get-ChildItem src -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```
 

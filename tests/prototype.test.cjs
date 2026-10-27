@@ -339,3 +339,73 @@ test('panel renders shared updates, sends once, and releases its subscription', 
   assert.equal(unsubscribed, true);
   assert.equal(panel.host.isConnected, false);
 });
+
+test('popup restores partial drafts on reopen, activates only on save, and clears drafts after success', async () => {
+  const drafts = new Map();
+  let pair = null;
+  let failSave = false;
+  async function openPopup() {
+    const nodes = new Map();
+    const environment = {
+      localStorage: {
+        getItem: key => drafts.get(key) ?? null,
+        setItem: (key, value) => drafts.set(key, value),
+        removeItem: key => drafts.delete(key)
+      },
+      document: { querySelector(selector) {
+        if (!nodes.has(selector)) nodes.set(selector, {
+          value: '', handlers: {},
+          addEventListener(type, listener) { this.handlers[type] = listener; }
+        });
+        return nodes.get(selector);
+      } },
+      chrome: {
+        storage: { local: { async get() { return { enabled: true }; } } },
+        runtime: { async sendMessage(request) {
+          if (request.action === 'getPair') return { ok: true, data: pair };
+          if (failSave) return { ok: false, error: 'Save failed' };
+          pair = request.action === 'clearPair' ? null : { twitchUrl: request.twitchUrl, youtubeUrl: request.youtubeUrl };
+          return { ok: true, data: pair };
+        } }
+      }
+    };
+    vm.createContext(environment);
+    await vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/popup.js'), 'utf8'), environment);
+    return nodes;
+  }
+  let popup = await openPopup();
+  popup.get('#twitch-url').value = twitchUrl;
+  popup.get('#twitch-url').handlers.input();
+  assert.equal(pair, null);
+  popup = await openPopup();
+  assert.equal(popup.get('#twitch-url').value, twitchUrl);
+  assert.equal(popup.get('#youtube-url').value, '');
+  popup.get('#youtube-url').value = youtubeUrl;
+  popup.get('#youtube-url').handlers.input();
+  popup = await openPopup();
+  assert.equal(popup.get('#youtube-url').value, youtubeUrl);
+  const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
+  failSave = true;
+  popup.get('#pair-form').handlers.submit({ preventDefault() {} });
+  await flush();
+  assert.equal(drafts.size, 1);
+  assert.equal(pair, null);
+  failSave = false;
+  popup.get('#pair-form').handlers.submit({ preventDefault() {} });
+  await flush();
+  assert.equal(pair.twitchUrl, twitchUrl);
+  assert.equal(pair.youtubeUrl, youtubeUrl);
+  assert.equal(drafts.size, 0);
+  popup = await openPopup();
+  assert.equal(popup.get('#twitch-url').value, twitchUrl);
+  popup.get('#twitch-url').value = '';
+  popup.get('#twitch-url').handlers.input();
+  popup = await openPopup();
+  assert.equal(popup.get('#twitch-url').value, '');
+  popup.get('#clear-pair').handlers.click();
+  await flush();
+  assert.equal(pair, null);
+  assert.equal(drafts.size, 0);
+  popup = await openPopup();
+  assert.equal(popup.get('#youtube-url').value, '');
+});

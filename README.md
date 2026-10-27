@@ -18,6 +18,7 @@ No npm install, build step, PHP server, or API keys are required.
 3. Paste full URLs into **Twitch channel URL** and **YouTube livestream URL**. Supported formats:
    - `https://www.twitch.tv/channel`
    - `https://www.youtube.com/watch?v=VIDEO_ID` or `https://www.youtube.com/live/VIDEO_ID`
+   URL fields save as a draft as you type/paste. You can close the popup to copy the other URL, then reopen it; the first URL should still be there. Drafts do not change the active pair until you click Save pair.
 4. Click **Save pair**. Both pages should show **Local shared room** and the same six sample messages.
 5. Send from Twitch and check YouTube, then send from YouTube and check Twitch. Labels indicate which page sent each message.
 6. Refresh either page: the shared history should remain.
@@ -47,7 +48,7 @@ The room service/client boundary can later connect to a Node.js backend and WebS
 
 - Pair configuration is saved as `roomPair:v1`; histories use `history:v1:...` in `chrome.storage.local`. No network backend is used. Uninstalling the extension clears its storage; see [Chrome storage documentation](https://developer.chrome.com/docs/extensions/reference/api/storage).
 - Each history keeps its latest 200 messages, including samples, with a 500-character input limit. There is no global cap, automatic expiration, or clear-history button yet. Quota/save errors keep the current draft for retry.
-- History validation failures display an error and leave saved data untouched. Drafts, collapsed state, and scroll position are not persisted. Pair changes replace the visible log while preserving the current input text; review it before sending into a newly selected room.
+- History validation failures display an error and leave saved data untouched. Chat-message drafts, collapsed state, and scroll position are not persisted. Pairing URL drafts are saved synchronously in the extension popup's localStorage and cleared after successful Save pair or Unpair. Pair changes replace the visible log while preserving the current input text; review it before sending into a newly selected room.
 - Queued sends use the room selected at submission; a room change before processing rejects the send rather than redirecting it silently. Automatic retries are not used, since a lost response could otherwise duplicate a saved message.
 - Matching uses URLs, not verified streamer ownership or live status. Twitch channel pages may be offline, and YouTube watch pages may be recordings. Pair URLs must use the `www` hosts shown above. Shorts, embedded players, chat popouts, mobile subdomains, and Twitch video pages are outside this milestone.
 - Everyone is labeled **You** because this is a local prototype without identities. Extension messages appear only in CrossChat and never in native Twitch/YouTube chat. Other viewers and browser profiles cannot see them.
@@ -56,6 +57,7 @@ The room service/client boundary can later connect to a Node.js backend and WebS
 ## Browser checklist
 
 - [ ] Reload the extension and refresh both tabs. Confirm no extension-card errors.
+- [ ] Paste the first URL, click away to copy the second, and reopen the popup: the first URL remains. Repeat with the second URL. Save the pair.
 - [ ] Save the pair: both pages show the shared-room notice and matching sample messages.
 - [ ] Send a unique message from each platform: it appears once in both tabs with the correct origin label.
 - [ ] Send quickly from both tabs: both messages remain in both tabs after refresh.

@@ -1,5 +1,7 @@
-﻿importScripts('mock-chat.js', 'history.js', 'rooms.js', 'twitch-emotes.js', 'twitch-eventsub.js', 'twitch-auth.js', 'twitch-buffer.js', 'twitch-live.js', 'youtube-auth.js', 'youtube-messages.js', 'youtube-live.js');
+﻿importScripts('mock-chat.js', 'view-model.js', 'history.js', 'rooms.js', 'twitch-emotes.js', 'twitch-eventsub.js', 'twitch-auth.js', 'twitch-buffer.js', 'twitch-live.js', 'youtube-auth.js', 'youtube-messages.js', 'youtube-live.js', 'stream-directory.js');
 const service = CrossChat.createRoomService(chrome.storage.local);
+const viewSettings = CrossChat.createViewSettings(chrome.storage.local);
+let streamDirectory = null;
 let twitchAuth = null;
 let twitchLive = null;
 let youtubeAuth = null;
@@ -29,9 +31,19 @@ const initializeYouTube = () => {
       session: chrome.storage.session, publish });
   }
 };
-const withLive = snapshot => {
+const getDirectory = () => {
+  initializeTwitch(); initializeYouTube();
+  if (!streamDirectory) streamDirectory = CrossChat.createStreamDirectory({ service,
+    getTwitch: () => twitchAuth, getYouTube: () => youtubeAuth, session: chrome.storage.session, publish });
+  return streamDirectory;
+};
+const roomView = async force => {
+  const [directory, viewPrefs] = await Promise.all([getDirectory().get(force), viewSettings.get()]);
+  return { directory, viewPrefs };
+};
+const withLive = (snapshot, extras = {}) => {
   const native = [...(twitchLive?.getMessages(snapshot.key) || []), ...(youtubeLive?.getMessages(snapshot.key) || [])];
-  return { ...snapshot, messages: [...snapshot.messages, ...native].sort((a, b) => a.time - b.time).slice(-200),
+  return { ...snapshot, ...extras, messages: [...snapshot.messages, ...native].sort((a, b) => a.time - b.time).slice(-200),
     liveStatus: twitchLive?.getStatus(snapshot.key), youtubeStatus: youtubeLive?.getStatus(snapshot.key) };
 };
 const synchronize = (restart = false) => {
@@ -46,6 +58,9 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
     const popup = sender.url === chrome.runtime.getURL('src/popup.html');
     if (popup) {
       if (request.action === 'getPair') return service.getPair();
+      if (request.action === 'getRoomView') return roomView(Boolean(request.force));
+      if (request.action === 'setSourceSettings') return service.setSourceSettings(request.key, request.settings);
+      if (request.action === 'setViewPrefs') return viewSettings.update(request.patch);
       if (['setPair', 'setSources', 'clearPair'].includes(request.action)) {
         const result = request.action === 'setPair' ? await service.setPair(request.twitchUrl, request.youtubeUrl)
           : request.action === 'setSources' ? await service.setSources(request.urls) : await service.clearPair();
@@ -87,15 +102,17 @@ chrome.runtime.onMessage.addListener((request, sender, respond) => {
         new URL(sender.url).origin !== new URL(request.href).origin) {
       throw new Error('This request must come from a supported stream page.');
     }
+    if (request.action === 'setViewPrefs') return viewSettings.update(request.patch);
+    if (request.action === 'setSourceSettings') return service.setSourceSettings(request.key, request.settings);
     if (request.action === 'snapshot') {
       const snapshot = await service.snapshot(request.href);
       // Start/recover the connection without making panel loading wait for APIs.
       synchronize().catch(() => {});
-      return withLive(snapshot);
+      return withLive(snapshot, await roomView(false));
     }
     if (request.action === 'send') {
       const snapshot = await service.send(request.href, request.key, request.text);
-      return withLive(snapshot);
+      return withLive(snapshot, await roomView(false));
     }
     throw new Error('Unknown CrossChat action.');
   };

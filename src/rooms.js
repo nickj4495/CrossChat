@@ -20,7 +20,17 @@
       pending = result.catch(() => {});
       return result;
     };
-    const getPair = async () => normalizePair((await storage.get('roomPair:v1'))['roomPair:v1'] || null);
+    const getPair = async () => {
+      const pair = normalizePair((await storage.get('roomPair:v1'))['roomPair:v1'] || null);
+      if (!pair) return null;
+      const saved = (await storage.get('sourceSettings:v1'))['sourceSettings:v1'] || {};
+      return { ...pair, sources: pair.sources.map((source, index) => {
+        const settings = saved[source.key] || {};
+        let groups = [];
+        try { groups = app.normalizeGroups(settings.groups || []); } catch { /* Invalid metadata does not block chat. */ }
+        return { ...source, groups, color: /^#[0-9a-f]{6}$/i.test(settings.color) ? settings.color.toLowerCase() : app.sourcePalette[index % app.sourcePalette.length] };
+      }) };
+    };
     const resolve = async href => {
       const context = app.getPageContext(href);
       if (!context) throw new Error('Open a supported Twitch channel or YouTube video.');
@@ -73,11 +83,26 @@
       });
       await openChat({ key, pair });
       await storage.set({ 'roomPair:v1': pair });
-      return pair;
+      return getPair();
     };
     return {
       getPair: () => enqueue(getPair),
       setSources: urls => enqueue(() => activate(urls)),
+      setSourceSettings(key, settings) {
+        return enqueue(async () => {
+          const pair = await getPair();
+          const source = pair?.sources.find(item => item.key === key);
+          if (!source) throw new Error('Save this stream in the room before editing its groups or color.');
+          const groups = settings?.groups === undefined ? source.groups : app.normalizeGroups(settings.groups);
+          const color = settings?.color ?? source.color;
+          if (typeof color !== 'string' || !/^#[0-9a-f]{6}$/i.test(color)) throw new Error('Choose a valid stream color.');
+          const sources = pair.sources.map(item => item.key === key ? { ...item, groups } : item);
+          if (app.roomGroups(sources).length > 20) throw new Error('Use up to 20 groups in a room.');
+          const saved = (await storage.get('sourceSettings:v1'))['sourceSettings:v1'] || {};
+          await storage.set({ 'sourceSettings:v1': { ...saved, [key]: { groups, color: color.toLowerCase() } } });
+          return getPair();
+        });
+      },
       // Backward-compatible entry point for existing two-platform callers.
       setPair(twitchUrl, youtubeUrl) {
         return enqueue(async () => {

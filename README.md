@@ -1,4 +1,4 @@
-﻿# CrossChat — milestone 7: combined Twitch and YouTube reading
+﻿# CrossChat — milestone 8: room workspace and chat controls
 
 CrossChat aims to combine live chats for streamers and viewers. This dependency-free Manifest V3 extension supports a shared local room across **2–10 Twitch channels and/or YouTube videos in one Chrome profile**. It implements Twitch OAuth/EventSub with native emote images and Google OAuth/YouTube chat polling. Message sending remains a local demo. Cross-device CrossChat rooms are not implemented.
 
@@ -24,7 +24,7 @@ No build step, npm install, or server is required. Local demos need no credentia
 2. Click **Save room**. You may use all Twitch channels, all YouTube videos, or a mix. Enter 2–10 distinct sources. Duplicate channel names and alternative URLs for the same YouTube video are rejected.
 3. Open any listed page. It should show **Local shared room** with the source count and sample messages labeled by platform and channel/video.
 4. Open another listed source in a second tab and send a message from each page. Both panels should update. Messages carry the origin of the page where they were sent; this is a demo label, not authenticated identity.
-5. Expand **Sources** above the message log and uncheck sources to hide their messages. Recheck them to restore the messages.
+5. Expand **Streams** above the message log and uncheck sources to hide their messages. Use group chips or All chats for group filtering. Configure per-stream groups/colors in the popup; see [Room workspace](docs/room-workspace.md).
 
 To add a source, add a URL line. To remove one, delete its line. Then click **Save room** again. URL drafts survive popup closure, so you can copy URLs one at a time. Draft changes do not affect the active room until saved.
 
@@ -36,7 +36,7 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 - Existing Twitch+YouTube pairs and their histories are preserved. Legacy pair drafts migrate to the new URL list. Old messages gain source labels when their origin is unambiguous; otherwise they appear as demo samples rather than guessing a channel.
 - **Disconnect room** restores each page's separate saved history. It does not delete room history.
 - Each history keeps its latest 200 messages, with a 500-character input limit. New room samples cover every configured source. Refreshing restores timestamps and history without adding new samples.
-- Source filters are per panel and remain active as new messages arrive. They do not delete messages, stop sends, or affect other tabs. Filters reset after refresh, panel recreation, or switching rooms. Chat drafts and scroll position are not persisted.
+- Group filters, individual source exclusions, and widget dimensions are shared across the popup/widgets in this Chrome profile and persist. Source colors/groups are saved separately from room membership. Filters affect viewing only; readers keep running. Message drafts and reading positions do not persist across page refresh.
 - Native Twitch messages have a separate, temporary 200-message worker buffer; see the Twitch guide for its clearing/reconnect behavior. The enable toggle controls panel visibility and pauses live reading across tabs. Collapse with the minus button to reach content under the panel; fullscreen video hides it.
 
 ## Architecture
@@ -53,8 +53,11 @@ Only one source list is active at a time. Other pages keep separate histories. Y
 - `src/background.js`: single-writer service worker. Validates senders, accepts room changes only from the popup, and derives origin labels from the sending page URL.
 - `src/room-client.js`: message/snapshot requests and live storage-change subscriptions with stale-response protection and cleanup.
 - `src/content.js`: navigation and panel lifecycle; guarded recovery checks start before initial rendering. Rechecks removal, fullscreen, visibility, and page restoration.
-- `src/panel.js`: isolated Shadow DOM UI, source labels/filters, safe text rendering, keyboard isolation, local sends, save/error feedback, collapse/expand.
-- `src/popup.html`, `popup.css`, `popup.js`: enable toggle and multi-line source editor with synchronous extension-page draft storage.
+- `src/view-model.js`, `view-controls.js`: shared groups, colors, bounded display preferences, filtering, and safe stream links.
+- `src/stream-directory.js`: authenticated cached broadcast-status lookups, independent from chat connection state.
+- `src/chat-scroll.js`: pause-on-scroll, message anchoring, resize/image handling, and Jump to newest.
+- `src/panel.js`: isolated Shadow DOM UI with group/source filters, color-coded message rows, links/status, resizing, safe rendering, keyboard isolation, and local demo sends.
+- `src/popup.html`, `popup.css`, `popup.js`, `room-ui.js`: room/connections tabs, source editor/cards, saved group/color drafts, status refresh, filters, and widget sizing.
 - `tests/prototype.test.cjs`: dependency-free Node tests, including simulated Chrome messaging/storage and UI checks.
 
 The background service provides a single place to coordinate room changes and sends. Durable state is reloaded from storage for each operation, so worker restarts preserve it. Messages use asynchronous replies as documented in [Chrome message passing](https://developer.chrome.com/docs/extensions/develop/concepts/messaging).
@@ -95,5 +98,7 @@ Get-ChildItem src -Filter *.js | ForEach-Object { node --check $_.FullName }
 ```
 
 Simulated messaging/storage/UI tests do not establish Chrome extension lifecycle or live platform compatibility. Complete the browser checklist for those behaviors.
+
+For the new room UI, live-status meanings, groups, colors, size controls, and scrolling, see [docs/room-workspace.md](docs/room-workspace.md).
 
 For Twitch app registration, sign-in setup, current verification limits, and live-chat browser checks, see [docs/twitch-integration.md](docs/twitch-integration.md). Google setup and the combined-feed checklist are in [docs/youtube-integration.md](docs/youtube-integration.md).

@@ -1,15 +1,21 @@
 ﻿<!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CrossChat settings</title><link rel="stylesheet" href="popup.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CrossChat workspace</title><link rel="stylesheet" href="popup.css"></head>
 <body>
-<h1>CrossChat <span>PROTOTYPE</span></h1><p>One place for your communities.</p>
-<label class="setting"><span>Enable CrossChat</span><input id="enabled" type="checkbox" role="switch" disabled></label><p id="status" role="status">Loading settings…</p>
-<form id="pair-form">
-<h2>Room sources</h2><p class="hint">Add 2–10 Twitch channels or YouTube videos, one URL per line. Delete a line to remove a source. Drafts survive closing this popup.</p>
-<label for="source-urls">Stream URLs</label><textarea id="source-urls" rows="6" required disabled spellcheck="false" placeholder="https://www.twitch.tv/channel_one&#10;https://www.twitch.tv/channel_two&#10;https://www.youtube.com/watch?v=VIDEO_ID"></textarea>
-<div class="actions"><button id="save-pair" type="submit" disabled>Save room</button><button id="clear-pair" type="button" disabled>Disconnect room</button></div>
-<p id="pair-status" role="status">Loading room…</p>
-</form>
+<header class="app-header"><span class="brand-mark" aria-hidden="true">C↔</span><div><h1>CrossChat</h1><p>Your streams. One conversation.</p></div><label class="enable-control"><span>Enabled</span><input id="enabled" type="checkbox" role="switch" disabled></label></header>
+<p id="status" class="app-status" role="status">Loading settings…</p>
+<nav class="tabs" role="tablist" aria-label="CrossChat sections"><button id="tab-room" type="button" role="tab" aria-selected="true" aria-controls="pane-room">Your room</button><button id="tab-connections" type="button" role="tab" aria-selected="false" aria-controls="pane-connections" tabindex="-1">Connections</button></nav>
+<main>
+<section id="pane-room" role="tabpanel" aria-labelledby="tab-room">
+<details class="room-editor"><summary>Add or remove stream URLs</summary><form id="pair-form"><p class="hint">Add 2–10 Twitch channels or YouTube videos, one URL per line. Drafts survive closing this popup.</p><label for="source-urls">Stream URLs</label><textarea id="source-urls" rows="4" required disabled spellcheck="false" placeholder="https://www.twitch.tv/channel_one&#10;https://www.twitch.tv/channel_two&#10;https://www.youtube.com/watch?v=VIDEO_ID"></textarea><div class="actions"><button id="save-pair" type="submit" disabled>Save room</button><button id="clear-pair" class="secondary" type="button" disabled>Disconnect room</button></div><p id="pair-status" role="status">Loading room…</p></form></details>
+<section class="view-section"><h2>Show chats</h2><div id="popup-groups" class="group-controls" role="group" aria-label="Show chats by group"></div><p class="hint">Select groups, or All chats to show every source. Filters do not stop the readers.</p></section>
+<div class="section-heading"><h2 id="stream-count">Your streams</h2><button id="status-refresh" class="secondary small" type="button">Refresh status</button></div><p class="hint">Live status is separate from chat connection. Sign in under Connections to check a platform. YouTube status checks also use Google quota.</p>
+<p id="streams-empty" class="empty-state">Add stream URLs above to build your room.</p><div id="saved-streams"></div>
+
+<details class="display-section"><summary>Widget size</summary><div class="size-grid"><label for="widget-width">Width <output id="widget-width-value"></output><input id="widget-width" type="range" min="320" max="720" step="20"></label><label for="widget-height">Height <output id="widget-height-value"></output><input id="widget-height" type="range" min="420" max="1000" step="20"></label></div></details>
+<p id="room-feedback" role="status"></p>
+</section>
+<section id="pane-connections" role="tabpanel" aria-labelledby="tab-connections" hidden>
 <section class="twitch-settings" aria-label="Twitch read-only chat">
 <h2>Read Twitch chat</h2>
 <details><summary>First-time Twitch setup</summary><p class="hint">Register an app at <a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noopener noreferrer">Twitch Developer Console</a>. Add this exact OAuth Redirect URL:</p>
@@ -30,5 +36,9 @@
 <div class="actions"><button id="youtube-start" type="button" disabled>Start reading</button><button id="youtube-stop" type="button" disabled>Stop</button></div>
 <p id="youtube-state" role="status">Checking YouTube…</p><p id="youtube-feedback" role="status"></p>
 </section>
-<footer>Twitch and YouTube support read-only live chat after setup. Message sending remains a local demo in this Chrome profile.</footer><script src="popup.js"></script><script src="twitch-ui.js"></script><script src="youtube-ui.js"></script>
+
+</section>
+</main>
+<footer>Read-only platform chat. Sending stays a local demo. Stream-status checks use platform APIs and refresh at most about once a minute.</footer>
+<script src="view-model.js"></script><script src="view-controls.js"></script><script src="popup.js"></script><script src="room-ui.js"></script><script src="twitch-ui.js"></script><script src="youtube-ui.js"></script>
 </body></html>

@@ -38,7 +38,7 @@ If moving/reinstalling the unpacked extension changes its extension ID, the Goog
 4. Open any room page (Twitch or YouTube). New native YouTube text messages should appear alongside Twitch messages with their actual authors and source labels. The YouTube label says **Live YouTube message · received this session**.
 5. Use **Stop** to stop only YouTube reading. **Disconnect** also clears the extension's Google token cache/connection state. Neither action stops Twitch. **Enable CrossChat** off stops both readers and hides the panels.
 
-You do not need to keep all source tabs open. Source filtering remains a local panel preference and does not stop a source's API reading. To stop quota use, press Stop, disconnect, or disable CrossChat.
+You do not need to keep all source tabs open. Source filtering remains a local panel preference and does not stop a source's API reading. Stop pauses chat polling; disconnect also removes the local Google connection. Broadcast-status metadata lookups in a visible room UI use separate API quota even when chat polling is stopped. See [Room workspace](room-workspace.md).
 
 ## Polling, continuation, and quota
 

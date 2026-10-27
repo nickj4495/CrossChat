@@ -25,7 +25,8 @@
       }
     };
     const changed = (changes, area) => {
-      if (area === 'local' && (changes['roomPair:v1'] || changes['twitchLive:revision'] ||
+      if (globalThis.document?.visibilityState === 'hidden') return;
+      if (area === 'local' && (changes['roomPair:v1'] || changes['sourceSettings:v1'] || changes['viewPrefs:v1'] || changes['twitchLive:revision'] ||
           changes[`history:v1:${snapshot?.key}`])) refresh();
     };
     chrome.storage.onChanged.addListener(changed);
@@ -37,11 +38,24 @@
       chrome.storage.onChanged.removeListener(changed);
       throw error;
     }
+    const becameVisible = () => { if (globalThis.document?.visibilityState !== 'hidden') refresh(); };
+    globalThis.document?.addEventListener?.('visibilitychange', becameVisible);
+    const directoryTimer = globalThis.setInterval?.(async () => {
+      if (stopped || globalThis.document?.visibilityState === 'hidden') return;
+      try {
+        const settings = await chrome.storage.local.get({ enabled: true });
+        if (settings.enabled !== false) await refresh();
+      } catch { /* Retry on a later refresh. */ }
+    }, 30000);
     return {
       getMessages: () => snapshot.messages.map(message => ({ ...message })),
       getRoom: () => ({ key: snapshot.key, pair: snapshot.pair }),
       getLiveStatus: () => snapshot.liveStatus,
       getYouTubeStatus: () => snapshot.youtubeStatus,
+      getDirectory: () => snapshot.directory || { sources: snapshot.pair?.sources || [], refreshing: false },
+      getViewPrefs: () => app.normalizeView(snapshot.viewPrefs),
+      async updateView(patch) { const result = await request('setViewPrefs', { patch }); await refresh(); return result; },
+      async updateSource(key, settings) { await request('setSourceSettings', { key, settings }); await refresh(); },
       subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
       async send(text) {
         const key = snapshot.key;
@@ -61,6 +75,8 @@
       },
       destroy() {
         stopped = true;
+        globalThis.clearInterval?.(directoryTimer);
+        globalThis.document?.removeEventListener?.('visibilitychange', becameVisible);
         sequence++;
         listeners.clear();
         chrome.storage.onChanged.removeListener(changed);

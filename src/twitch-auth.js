@@ -100,7 +100,7 @@
       },
       invalidate: clear,
       async api(path, options = {}) {
-        if (!/^\/(users\?|eventsub\/subscriptions(?:\?|$))/.test(path)) throw new Error('Unsupported Twitch API request.');
+        if (!/^\/(users\?|streams\?|eventsub\/subscriptions(?:\?|$))/.test(path)) throw new Error('Unsupported Twitch API request.');
         const saved = await credentials();
         if (!saved) throw new Error('Sign in to Twitch to read live chat.');
         const response = await http(`https://api.twitch.tv/helix${path}`, { ...options,

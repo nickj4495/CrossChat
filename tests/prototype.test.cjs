@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const sandbox = { URL };
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/mock-chat.js'), 'utf8'), sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/view-model.js'), 'utf8'), sandbox);
 const app = sandbox.CrossChat;
 test('supported routes and excluded pages', () => {
   for (const href of ['https://www.twitch.tv/cozy_streamer', 'https://www.youtube.com/watch?v=abc-123', 'https://www.youtube.com/live/abc_123']) assert.ok(app.getPageContext(href));
@@ -298,11 +299,21 @@ test('service worker accepts popup pairing and top-frame requests, rejects other
 test('panel renders shared updates, sends once, and releases its subscription', async () => {
   function element() {
     return {
-      children: [], handlers: {}, style: {}, value: '', isConnected: true,
-      append(...nodes) { this.children.push(...nodes); },
-      replaceChildren(...nodes) { this.children = nodes; },
+      children: [], handlers: {}, attributes: {}, style: {}, value: '', isConnected: true,
+      scrollTop: 0, scrollHeight: 1000, clientHeight: 300,
+      append(...nodes) { for (const node of nodes) this.insertBefore(node, null); },
+      insertBefore(node, next) {
+        if (node.parent) { const i = node.parent.children.indexOf(node); if (i >= 0) node.parent.children.splice(i, 1); }
+        const index = next ? this.children.indexOf(next) : this.children.length;
+        this.children.splice(index < 0 ? this.children.length : index, 0, node); node.parent = this;
+      },
+      replaceChildren(...nodes) { this.children = []; this.append(...nodes); },
       addEventListener(type, listener) { this.handlers[type] = listener; },
-      setAttribute() {}, remove() { this.isConnected = false; }, focus() {}
+      removeEventListener(type) { delete this.handlers[type]; },
+      setAttribute(name, value) { this.attributes[name] = value; },
+      removeAttribute(name) { delete this.attributes[name]; },
+      remove() { if (this.parent) { const i = this.parent.children.indexOf(this); if (i >= 0) this.parent.children.splice(i, 1); } this.isConnected = false; },
+      focus() {}
     };
   }
   const nodes = new Map();
@@ -321,6 +332,7 @@ test('panel renders shared updates, sends once, and releases its subscription', 
     CrossChat: {}
   };
   vm.createContext(environment);
+  for (const file of ['view-model.js', 'view-controls.js', 'chat-scroll.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', file), 'utf8'), environment);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/twitch-emotes.js'), 'utf8'), environment);
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/panel.js'), 'utf8'), environment);
   let notify;
@@ -339,14 +351,14 @@ test('panel renders shared updates, sends once, and releases its subscription', 
   };
   const panel = environment.CrossChat.createPanel({ platform: 'twitch' }, provider);
   assert.equal(nodes.get('.messages').children.length, 6);
-  assert.match(nodes.get('.notice').textContent, /Local shared room/);
+  assert.match(nodes.get('.notice').textContent, /streams in your room/);
   messages.push({ author: 'You', text: 'other tab', time: Date.now(), platform: 'youtube', local: true });
   notify(null);
   assert.equal(nodes.get('.messages').children.length, 7);
-  nodes.get('input').value = 'my message';
+  nodes.get('#message').value = 'my message';
   await nodes.get('form').handlers.submit({ preventDefault() {} });
   assert.equal(nodes.get('.messages').children.length, 8);
-  assert.equal(nodes.get('input').value, '');
+  assert.equal(nodes.get('#message').value, '');
   const options = nodes.get('.source-options').children;
   assert.equal(options.length, 2);
   const checkbox = options[0].children[0];

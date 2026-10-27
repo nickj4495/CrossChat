@@ -65,8 +65,11 @@
     // Mount outside the site's replaceable body so page transitions cannot leave
     // a connected panel trapped inside an old/hidden application container.
     const container = document.documentElement || document.body;
-    if (panel.host.parentElement !== container) container.append(panel.host);
-    panel.host.style.setProperty('display', document.fullscreenElement ? 'none' : 'block', 'important');
+    if (panel.host.parentElement !== container) { container.append(panel.host); panel.mounted?.(); }
+    const visible = !document.fullscreenElement;
+    panel.host.style.setProperty('display', visible ? 'block' : 'none', 'important');
+    if (visible && !panel.visible) panel.mounted?.();
+    panel.visible = visible;
   }
   async function start() {
     try {

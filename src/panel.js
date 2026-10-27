@@ -52,7 +52,7 @@
       if (message.local) {
         const label = document.createElement('span');
         label.className = 'local';
-        label.textContent = 'Only you can see this';
+        label.textContent = 'Local demo · Shared across your paired tabs';
         row.append(label);
       }
       log.append(row);
@@ -62,7 +62,20 @@
     const status = root.querySelector('.foot');
     let sending = false;
     input.disabled = !provider;
-    if (provider) provider.getMessages().forEach(append);
+    const render = error => {
+      if (error) {
+        status.textContent = 'Could not refresh chat. Your next send will retry the connection.';
+        return;
+      }
+      log.replaceChildren();
+      provider.getMessages().forEach(append);
+      const room = provider.getRoom();
+      root.querySelector('.notice').textContent = room.pair
+        ? `Local shared room · ${room.pair.twitchKey.slice(7)} ↔ YouTube`
+        : 'Separate local chat · Pair streams in the extension popup.';
+    };
+    const unsubscribe = provider?.subscribe(render);
+    if (provider) render(null);
     else status.textContent = loadError || 'Loading saved chat…';
     input.addEventListener('input', () => { send.disabled = sending || !input.value.trim(); });
     root.querySelector('form').addEventListener('submit', async event => {
@@ -75,15 +88,15 @@
       try {
         const message = await provider.send(input.value, context.platform);
         if (message) {
-          append(message);
+          render(null);
           input.value = '';
-          status.textContent = 'Saved on this device. Nothing sent to either platform.';
+          status.textContent = 'Saved in CrossChat on this device. Nothing posted to native chat.';
         } else {
           status.textContent = 'Enter a message of 1–500 characters.';
         }
       } catch (error) {
         console.warn('CrossChat could not save message.', error);
-        status.textContent = 'Message not saved. Your text is kept here; please try again.';
+        status.textContent = error.message || 'Message not saved. Your text is kept here; please try again.';
       } finally {
         sending = false;
         input.disabled = false;
@@ -102,6 +115,7 @@
     return {
       host,
       destroy() {
+        unsubscribe?.();
         keyboardEvents.forEach(type => window.removeEventListener(type, isolateKeyboard, true));
         host.remove();
       }

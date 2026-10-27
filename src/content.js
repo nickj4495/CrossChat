@@ -15,6 +15,7 @@
       panel?.destroy();
       panel = null;
       currentKey = key;
+      provider?.destroy?.();
       provider = null;
       loading = false;
       loadError = null;
@@ -27,8 +28,8 @@
     if (!provider && !loading && !loadError) {
       loading = true;
       const requestGeneration = generation;
-      app.createPersistentChat(context).then(chat => {
-        if (requestGeneration !== generation) return;
+      app.createRoomChat(context).then(chat => {
+        if (requestGeneration !== generation) { chat.destroy?.(); return; }
         provider = chat;
         loading = false;
         reconcile();

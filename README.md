@@ -1,67 +1,87 @@
-﻿# CrossChat — milestone 2: local history
+﻿# CrossChat — milestone 3: shared local room
 
-A dependency-free Chrome Manifest V3 extension with mock Twitch and YouTube chat. No build step, backend, authentication, API keys, network requests, or real chat integration.
+CrossChat aims to combine a streamer's Twitch and YouTube chats for streamers and viewers. This dependency-free Manifest V3 prototype demonstrates a shared conversation between paired pages in **one Chrome profile**. It does not read or post native platform chat, connect different computers, or use authentication/APIs.
 
-## Load in Chrome
+## Load locally
 
-1. Open `chrome://extensions`.
-2. Turn on **Developer mode** in the upper-right corner.
-3. Choose **Load unpacked** and select this CrossChat folder (the one containing `manifest.json`).
-4. Refresh any Twitch or YouTube tabs that were already open.
-5. Open `https://www.twitch.tv/CHANNEL_NAME` or a YouTube livestream at `https://www.youtube.com/watch?v=VIDEO_ID`.
-6. Look for CrossChat at the bottom right. Six sample messages should appear with Twitch/YouTube labels.
-7. Use Chrome's Extensions menu (puzzle icon) to pin CrossChat. Click its icon to enable or disable the panel across tabs.
+1. Open `chrome://extensions` and enable **Developer mode**.
+2. Select **Load unpacked**, then this folder containing `manifest.json`.
+3. After any extension edits, click **Reload** on its extension card and refresh all test tabs.
+4. Pin CrossChat through Chrome's Extensions menu (puzzle icon) to access its popup.
 
-After editing extension files, click **Reload** on its card at `chrome://extensions`, then refresh your test tabs. No PHP server or npm install is needed.
+No npm install, build step, PHP server, or API keys are required.
+
+## Pair a streamer's broadcasts
+
+1. Open the streamer's Twitch channel and YouTube livestream in two tabs.
+2. Click the CrossChat toolbar icon.
+3. Paste full URLs into **Twitch channel URL** and **YouTube livestream URL**. Supported formats:
+   - `https://www.twitch.tv/channel`
+   - `https://www.youtube.com/watch?v=VIDEO_ID` or `https://www.youtube.com/live/VIDEO_ID`
+4. Click **Save pair**. Both pages should show **Local shared room** and the same six sample messages.
+5. Send from Twitch and check YouTube, then send from YouTube and check Twitch. Labels indicate which page sent each message.
+6. Refresh either page: the shared history should remain.
+
+One pair is active at a time. Saving a new pair switches the active room. Other channels/videos keep separate histories. Shared rooms start fresh rather than importing old page histories. **Unpair** restores separate histories; saving the same pair again restores its shared room. Changing the YouTube video ID creates a different room. Twitch channel names are normalized to lowercase.
+
+The enable/disable toggle still controls panel visibility across tabs. Collapse the panel with the minus button to access content under it. Fullscreen video hides the panel.
 
 ## Architecture
 
-- `manifest.json`: MV3 configuration, domain-scoped content scripts, and storage permission.
-- `src/mock-chat.js`: normalized message objects (`platform`, `author`, `text`, `time`, `local`), route detection, and mock provider. Replace the provider boundary with a network adapter in a later milestone.
-- `src/history.js`: asynchronous storage adapter; loads and validates per-channel/video history, queues writes within a provider, and confirms saves before updating memory.
-- `src/panel.js`: DOM rendering, isolated Shadow DOM styles, local compose form, loading/save feedback, collapse/expand. User text is rendered with `textContent`.
-- `src/content.js`: loads the persistent provider and connects it to the panel; checks routes once per second, rejects stale loads after navigation, removes the panel on unsupported routes, and hides it during fullscreen.
-- `src/popup.html`, `popup.css`, `popup.js`: persistent global enable/disable setting using `chrome.storage.local`.
-- `tests/prototype.test.cjs`: dependency-free Node checks of routes, mock provider, manifest references, restoration, isolation, write failures/retries, retention, and invalid saved data.
+- `manifest.json`: MV3 configuration, domain-scoped content scripts, popup, service worker, and only the `storage` permission.
+- `src/mock-chat.js`: route detection, mock sample data, normalized message shape, and synchronous mock sending.
+- `src/history.js`: storage adapter; versioned histories, validation, 200-message retention, and save confirmation before updating memory. Existing milestone-2 histories remain compatible.
+- `src/rooms.js`: shared-room service; validates pair URLs, resolves a page to its room, and queues all reads/writes so two tabs cannot overwrite each other's sends.
+- `src/background.js`: service worker; the single writer for histories and pairing. Validates message senders and derives platform labels from page URLs. Pair changes are accepted only from the extension popup.
+- `src/room-client.js`: content-script provider; requests snapshots/sends and uses storage-change notifications to refresh paired tabs. Subscription cleanup and response sequencing prevent stale updates.
+- `src/content.js`: page/panel lifecycle; detects navigation once per second and discards old loads after switching pages.
+- `src/panel.js`: Shadow DOM UI; safe text rendering, keyboard isolation, live history rendering, compose form, save/error feedback, and collapse/expand.
+- `src/popup.html`, `popup.css`, `popup.js`: enable toggle and manual stream pairing.
+- `tests/prototype.test.cjs`: dependency-free unit/integration checks using Node's test runner and simulated Chrome messaging/storage.
 
-The scripts load in manifest order and share a small namespace inside Chrome's isolated content-script environment. This avoids a bundler for the first milestone. Shadow DOM separates CSS from the host site. The panel appends its own floating element without replacing the native chat or changing player layout. No service worker is needed until background responsibilities exist.
+The panel appends its own floating element and does not replace native chat or modify player layout. Shared message operations now go through the service worker rather than writing snapshots directly from tabs. Durable state is reloaded from storage for each operation, so worker restarts do not reset history. Chrome messaging uses asynchronous replies as documented in [Chrome message passing](https://developer.chrome.com/docs/extensions/develop/concepts/messaging).
 
-A future backend can supply messages through the provider boundary. OAuth credentials, platform API contracts, identity linking, moderation, and cross-platform delivery remain future design work. Local sends currently use the platform of the page as their label; this does not represent a logged-in identity.
+The room service/client boundary can later connect to a Node.js backend and WebSockets. Cross-device room membership, identities, OAuth, moderation, official chat adapters, and any native cross-posting require future implementation and verification.
 
-## Prototype limits
+## Persistence and limits
 
-- Route detection does not verify live status: Twitch channel pages may be offline and YouTube watch pages may be recorded videos. YouTube Shorts, embedded players, popout chat, mobile subdomains, and Twitch video pages are outside this milestone.
-- The floating panel covers part of the page while expanded. Collapse it with the minus button to access content underneath. Fullscreen video hides it.
-- Messages are stored on this Chrome profile per Twitch channel or YouTube video, including sample messages and timestamps. Refreshing or returning to a channel restores its saved history. Disabling and enabling keeps history but resets the panel's collapsed state. Draft input text is not persisted.
-- Maximum 500 characters per message; only the latest 200 messages are retained. No automatic mock feed or actual viewer counts are simulated.
-- The enable/disable preference is shared across tabs. History does not synchronize between already open tabs: simultaneous sends to the same channel/video use the last saved snapshot. Prefer one tab per channel for this milestone. Incognito behavior depends on Chrome's extension settings.
-- History uses `chrome.storage.local` under versioned keys such as `history:v1:twitch:channel`. No new permissions are requested. Uninstalling the extension clears this storage. There is no automatic expiration, global history cap, or clear-history button yet; quota/write errors leave the draft in the input for retry. Invalid saved histories display a load error and are left untouched. See [Chrome storage documentation](https://developer.chrome.com/docs/extensions/reference/api/storage).
+- Pair configuration is saved as `roomPair:v1`; histories use `history:v1:...` in `chrome.storage.local`. No network backend is used. Uninstalling the extension clears its storage; see [Chrome storage documentation](https://developer.chrome.com/docs/extensions/reference/api/storage).
+- Each history keeps its latest 200 messages, including samples, with a 500-character input limit. There is no global cap, automatic expiration, or clear-history button yet. Quota/save errors keep the current draft for retry.
+- History validation failures display an error and leave saved data untouched. Drafts, collapsed state, and scroll position are not persisted. Pair changes replace the visible log while preserving the current input text; review it before sending into a newly selected room.
+- Queued sends use the room selected at submission; a room change before processing rejects the send rather than redirecting it silently. Automatic retries are not used, since a lost response could otherwise duplicate a saved message.
+- Matching uses URLs, not verified streamer ownership or live status. Twitch channel pages may be offline, and YouTube watch pages may be recordings. Pair URLs must use the `www` hosts shown above. Shorts, embedded players, chat popouts, mobile subdomains, and Twitch video pages are outside this milestone.
+- Everyone is labeled **You** because this is a local prototype without identities. Extension messages appear only in CrossChat and never in native Twitch/YouTube chat. Other viewers and browser profiles cannot see them.
+- Incognito behavior depends on Chrome extension settings; use regular tabs in the same profile for this test.
 
-## Testing checklist
+## Browser checklist
 
-- [ ] Load unpacked: Chrome shows no manifest or extension errors.
-- [ ] Open a Twitch channel and a YouTube livestream: each shows exactly one panel with both platform labels.
-- [ ] Send with the button and with Enter: text appears once as **You**, with the current platform label and local-only notice.
-- [ ] Type `f`, `k`, `m`, spaces, and arrow keys inside the message input: video fullscreen, playback, mute, and seeking must not change. Check typing, Backspace, paste, Tab, and Enter-to-send still work. Click back on the player and confirm its shortcuts still work.
-- [ ] Blank/whitespace messages cannot send; input stops at 500 characters.
-- [ ] Send `<img src=x onerror=alert(1)>`: it appears as literal text.
-- [ ] Toggle off in the extension popup: panels disappear in both tabs; toggle on: they return. Refresh: preference persists.
-- [ ] Collapse/expand; tab through input and buttons; resize the window.
-- [ ] Play/pause, seek, use native chat, and enter/exit fullscreen. Confirm original controls still work and panel hides in fullscreen.
-- [ ] Navigate between videos/channels using site links: one panel remains, each video/channel loads its own saved history. Navigate home: panel disappears.
-- [ ] Send a unique message, refresh, and verify it returns once with its original timestamp. Navigate to a different channel/video, send another message, then return: each history stays separate.
-- [ ] Close/reopen the tab and restart Chrome: saved history should return. Revisit multiple times and check the six initial mock messages are not duplicated.
-- [ ] Reload extension and refresh tabs after edits; inspect the extension card's Errors section and page DevTools console.
+- [ ] Reload the extension and refresh both tabs. Confirm no extension-card errors.
+- [ ] Save the pair: both pages show the shared-room notice and matching sample messages.
+- [ ] Send a unique message from each platform: it appears once in both tabs with the correct origin label.
+- [ ] Send quickly from both tabs: both messages remain in both tabs after refresh.
+- [ ] Close/reopen tabs and restart Chrome: the pair and shared history return without duplicate samples.
+- [ ] Open another channel/video: it stays separate. Navigate back via site links: the shared room returns, with only one panel.
+- [ ] Unpair: separate histories return. Save the same pair: shared history returns. Save another pair: unrelated pages stay separate.
+- [ ] Enter invalid URLs or swap Twitch/YouTube fields: pairing fails with a useful error and leaves the active pair intact.
+- [ ] Toggle off/on: panels disappear/return across tabs and messages remain saved.
+- [ ] Type `f`, `k`, `m`, spaces, arrow keys, Backspace, and paste inside the input: player shortcuts do not activate. Enter sends and Tab navigates. Player shortcuts still work outside the panel.
+- [ ] Send `<img src=x onerror=alert(1)>`: it displays literally. Blank messages cannot send.
+- [ ] Collapse/expand, resize, use native chat/player controls, and enter/exit fullscreen.
 
-Run automated checks with Node.js installed:
+## Automated checks
+
+With Node.js installed:
 
 ```powershell
 node --test tests/prototype.test.cjs
 node --check src/mock-chat.js
 node --check src/history.js
-node --check src/panel.js
+node --check src/rooms.js
+node --check src/background.js
+node --check src/room-client.js
 node --check src/content.js
+node --check src/panel.js
 node --check src/popup.js
 ```
 
-Automated logic checks do not establish compatibility with live Twitch/YouTube layouts. The browser checklist must be completed in Chrome.
+Simulated messaging/storage tests do not verify Chrome permissions, extension lifecycle, or compatibility with live platform pages. Complete the browser checklist to verify those behaviors.

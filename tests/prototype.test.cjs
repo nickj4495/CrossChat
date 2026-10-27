@@ -34,7 +34,7 @@ test('manifest references existing local files and requests only storage', () =>
   const manifest = JSON.parse(fs.readFileSync(path.join(base, 'manifest.json'), 'utf8').replace(/^\uFEFF/, ''));
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.permissions, ['storage']);
-  for (const file of [...manifest.content_scripts[0].js, manifest.action.default_popup]) assert.ok(fs.existsSync(path.join(base, file)));
+  for (const file of [...manifest.content_scripts[0].js, manifest.action.default_popup, manifest.background.service_worker]) assert.ok(fs.existsSync(path.join(base, file)));
 });
 
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/history.js'), 'utf8'), sandbox);
@@ -118,7 +118,7 @@ test('slow history loads cannot mount a previous channel after navigation', asyn
     setInterval(callback) { tick = callback; return 1; }, clearInterval() {},
     CrossChat: {
       getPageContext: app.getPageContext,
-      createPersistentChat(context) {
+      createRoomChat(context) {
         return new Promise(resolve => requests.push({ key: context.key, resolve }));
       },
       createPanel(context, provider) {
@@ -149,4 +149,193 @@ test('slow history loads cannot mount a previous channel after navigation', asyn
   location.href = 'https://www.twitch.tv/';
   tick();
   assert.equal(mounted.size, 0);
+});
+
+
+vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/rooms.js'), 'utf8'), sandbox);
+const twitchUrl = 'https://www.twitch.tv/alpha';
+const youtubeUrl = 'https://www.youtube.com/watch?v=video123';
+test('paired platforms share history, concurrent sends survive, worker restart restores room', async () => {
+  const storage = memoryStorage();
+  const service = app.createRoomService(storage);
+  const original = await service.snapshot(twitchUrl);
+  await service.send(twitchUrl, original.key, 'old unpaired message');
+  const pair = await service.setPair(twitchUrl, youtubeUrl);
+  const [twitch, youtube] = await Promise.all([service.snapshot(twitchUrl), service.snapshot(youtubeUrl)]);
+  assert.equal(twitch.key, youtube.key);
+  assert.equal(twitch.messages.length, 6);
+  await Promise.all([
+    service.send(twitchUrl, pair.key, 'hello from Twitch'),
+    service.send(youtubeUrl, pair.key, 'hello from YouTube')
+  ]);
+  const restoredService = app.createRoomService(storage);
+  const history = await restoredService.snapshot(youtubeUrl);
+  assert.equal(history.messages.length, 8);
+  assert.equal(history.messages.at(-2).platform, 'twitch');
+  assert.equal(history.messages.at(-1).platform, 'youtube');
+  assert.equal((await restoredService.snapshot('https://www.twitch.tv/other')).messages.length, 6);
+  await restoredService.clearPair();
+  assert.equal((await restoredService.snapshot(twitchUrl)).messages.at(-1).text, 'old unpaired message');
+  await assert.rejects(restoredService.send(twitchUrl, pair.key, 'stale room send'), /Room changed/);
+  await restoredService.setPair(twitchUrl, youtubeUrl);
+  assert.equal((await restoredService.snapshot(youtubeUrl)).messages.length, 8);
+});
+test('pair validation, failed writes, and queue recovery preserve saved data', async () => {
+  const storage = memoryStorage();
+  const service = app.createRoomService(storage);
+  await assert.rejects(service.setPair(youtubeUrl, twitchUrl), /full Twitch/);
+  await assert.rejects(service.setPair('https://evil.example/alpha', youtubeUrl));
+  assert.equal(await service.getPair(), null);
+  const pair = await service.setPair(twitchUrl, youtubeUrl);
+  storage.fail = true;
+  await assert.rejects(service.send(twitchUrl, pair.key, 'not saved'), /unavailable/);
+  storage.fail = false;
+  await service.send(youtubeUrl, pair.key, 'saved after retry');
+  const history = await service.snapshot(twitchUrl);
+  assert.equal(history.messages.length, 7);
+  assert.equal(history.messages.at(-1).text, 'saved after retry');
+  await assert.rejects(service.send(twitchUrl, pair.key, '   '), /1–500/);
+});
+test('two live clients receive storage updates, pairing and unpairing without reload', async () => {
+  const storage = memoryStorage();
+  const listeners = new Set();
+  const originalSet = storage.set;
+  storage.set = async function(values) {
+    await originalSet.call(this, values);
+    const changes = Object.fromEntries(Object.entries(values).map(([key, value]) => [key, { newValue: value }]));
+    listeners.forEach(listener => listener(changes, 'local'));
+  };
+  const service = app.createRoomService(storage);
+  const makeClient = href => {
+    const environment = {
+      location: { href },
+      chrome: {
+        storage: { onChanged: {
+          addListener(listener) { listeners.add(listener); },
+          removeListener(listener) { listeners.delete(listener); }
+        } },
+        runtime: { async sendMessage(request) {
+          try {
+            const data = request.action === 'snapshot'
+              ? await service.snapshot(request.href)
+              : await service.send(request.href, request.key, request.text);
+            return { ok: true, data };
+          } catch (error) { return { ok: false, error: error.message }; }
+        } }
+      },
+      CrossChat: {}
+    };
+    vm.createContext(environment);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/room-client.js'), 'utf8'), environment);
+    return environment.CrossChat.createRoomChat({});
+  };
+  const [twitch, youtube] = await Promise.all([makeClient(twitchUrl), makeClient(youtubeUrl)]);
+  const drain = async () => { for (let i = 0; i < 10; i++) { await service.getPair(); await Promise.resolve(); } };
+  await service.setPair(twitchUrl, youtubeUrl);
+  await drain();
+  assert.equal(twitch.getRoom().key, youtube.getRoom().key);
+  await Promise.all([twitch.send('Twitch tab'), youtube.send('YouTube tab')]);
+  await drain();
+  assert.equal(twitch.getMessages().length, 8);
+  assert.equal(youtube.getMessages().length, 8);
+  assert.equal(twitch.getMessages().at(-1).text, youtube.getMessages().at(-1).text);
+  assert.equal(twitch.getMessages().at(-2).platform, 'twitch');
+  assert.equal(twitch.getMessages().at(-1).platform, 'youtube');
+  await service.clearPair();
+  await drain();
+  assert.notEqual(twitch.getRoom().key, youtube.getRoom().key);
+  assert.equal(twitch.getMessages().length, 6);
+  assert.equal(youtube.getMessages().length, 6);
+  twitch.destroy(); youtube.destroy();
+  assert.equal(listeners.size, 0);
+});
+
+test('service worker accepts popup pairing and top-frame requests, rejects other senders', async () => {
+  const storage = memoryStorage();
+  let handler;
+  const environment = {
+    URL, console: { warn() {} },
+    chrome: {
+      storage: { local: storage },
+      runtime: {
+        id: 'test-id',
+        getURL: file => `chrome-extension://test-id/${file}`,
+        onMessage: { addListener(listener) { handler = listener; } }
+      }
+    }
+  };
+  vm.createContext(environment);
+  environment.importScripts = (...files) => {
+    for (const file of files) vm.runInContext(fs.readFileSync(path.join(__dirname, '../src', file), 'utf8'), environment);
+  };
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/background.js'), 'utf8'), environment);
+  const invoke = (request, sender) => new Promise(resolve => {
+    assert.equal(handler({ scope: 'crosschat', ...request }, sender, resolve), true);
+  });
+  const popup = { id: 'test-id', url: 'chrome-extension://test-id/src/popup.html' };
+  const page = { id: 'test-id', url: twitchUrl, tab: { id: 1 }, frameId: 0 };
+  assert.equal((await invoke({ action: 'setPair', twitchUrl, youtubeUrl }, popup)).ok, true);
+  const snapshot = await invoke({ action: 'snapshot', href: twitchUrl }, page);
+  assert.equal(snapshot.ok, true);
+  assert.equal((await invoke({ action: 'send', href: twitchUrl, key: snapshot.data.key, text: 'worker message' }, page)).data.message.platform, 'twitch');
+  assert.equal((await invoke({ action: 'clearPair' }, page)).ok, false);
+  assert.equal((await invoke({ action: 'snapshot', href: youtubeUrl }, page)).ok, false);
+  assert.equal((await invoke({ action: 'snapshot', href: twitchUrl }, { ...page, frameId: 2 })).ok, false);
+  assert.equal((await invoke({ action: 'getPair' }, { ...popup, id: 'other-id' })).ok, false);
+});
+
+test('panel renders shared updates, sends once, and releases its subscription', async () => {
+  function element() {
+    return {
+      children: [], handlers: {}, style: {}, value: '', isConnected: true,
+      append(...nodes) { this.children.push(...nodes); },
+      replaceChildren(...nodes) { this.children = nodes; },
+      addEventListener(type, listener) { this.handlers[type] = listener; },
+      setAttribute() {}, remove() { this.isConnected = false; }, focus() {}
+    };
+  }
+  const nodes = new Map();
+  const root = { querySelector(selector) {
+    if (!nodes.has(selector)) nodes.set(selector, element());
+    return nodes.get(selector);
+  } };
+  const environment = {
+    console,
+    document: { createElement() {
+      const node = element();
+      node.attachShadow = () => root;
+      return node;
+    } },
+    window: { addEventListener() {}, removeEventListener() {} },
+    CrossChat: {}
+  };
+  vm.createContext(environment);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../src/panel.js'), 'utf8'), environment);
+  let notify;
+  let unsubscribed = false;
+  const messages = app.createMockChat().getMessages();
+  const provider = {
+    getMessages: () => messages,
+    getRoom: () => ({ pair: { twitchKey: 'twitch:alpha' } }),
+    subscribe(listener) { notify = listener; return () => { unsubscribed = true; }; },
+    async send(text) {
+      const message = { author: 'You', text, time: Date.now(), platform: 'twitch', local: true };
+      messages.push(message);
+      notify(null);
+      return message;
+    }
+  };
+  const panel = environment.CrossChat.createPanel({ platform: 'twitch' }, provider);
+  assert.equal(nodes.get('.messages').children.length, 6);
+  assert.match(nodes.get('.notice').textContent, /Local shared room/);
+  messages.push({ author: 'You', text: 'other tab', time: Date.now(), platform: 'youtube', local: true });
+  notify(null);
+  assert.equal(nodes.get('.messages').children.length, 7);
+  nodes.get('input').value = 'my message';
+  await nodes.get('form').handlers.submit({ preventDefault() {} });
+  assert.equal(nodes.get('.messages').children.length, 8);
+  assert.equal(nodes.get('input').value, '');
+  panel.destroy();
+  assert.equal(unsubscribed, true);
+  assert.equal(panel.host.isConnected, false);
 });
